@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const quizController = require('../controllers/quiz.controller');
 const { authenticateJWT, isAdmin } = require('../middleware/auth.middleware');
+const { validate, handleValidationErrors } = require('../middleware/validation.middleware');
 
 // Public routes
 router.get('/', quizController.getAllQuizzes);

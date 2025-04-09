@@ -1,6 +1,8 @@
 const express = require('express');
 const questionController = require('../controllers/question.controller');
 const { authenticateJWT } = require('../middleware/auth.middleware');
+const { validate, handleValidationErrors } = require('../middleware/validation.middleware');
+
 
 const router = express.Router();
 

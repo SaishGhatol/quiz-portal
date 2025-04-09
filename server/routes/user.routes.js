@@ -10,3 +10,5 @@ router.get('/:id', authenticateJWT, userController.getUserProfile);
 router.put('/:id', authenticateJWT, userController.updateProfile);
 router.put('/:id/password', authenticateJWT, userController.changePassword);
 router.put('/:id/role', authenticateJWT, isAdmin, userController.changeUserRole);
+
+module.exports = router;

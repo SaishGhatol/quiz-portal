@@ -1,112 +1,85 @@
+// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-// Pages
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import QuizList from './pages/QuizList';
-import QuizDetails from './pages/QuizDetails';
-import TakeQuiz from './pages/TakeQuiz';
-import QuizResults from './pages/QuizResults';
-import QuizHistory from './pages/QuizHistory';
-import NotFound from './pages/NotFound';
+// Layout components
+import Navbar from './components/layout/Navbar';
+import Footer from './components/layout/Footer';
 
-// Admin pages
-import ManageQuizzes from './pages/admin/ManageQuizzes';
-import CreateQuiz from './pages/admin/CreateQuiz';
-import EditQuiz from './pages/admin/EditQuiz';
-import ManageUsers from './pages/admin/ManageUsers';
+// Auth components
+import Login from './components/auth/Login';
+import Register from './components/auth/Register';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AdminRoute from './components/auth/AdminRoute';
 
-// Components
-import Layout from './components/layout/Layout';
-import ProtectedRoute from './components/common/ProtectedRoute';
-import AdminRoute from './components/common/AdminRoute';
+// User components
+import Dashboard from './components/dashboard/Dashboard';
+import Profile from './components/profile/Profile';
+import UserAttempts from './components/profile/UserAttempts';
+import AttemptDetail from './components/profile/AttemptDetail';
+
+// Quiz components
+import QuizList from './components/quiz/QuizList';
+import QuizDetail from './components/quiz/QuizDetail';
+import TakeQuiz from './components/quiz/TakeQuiz';
+import QuizResults from './components/quiz/QuizResults';
+
+// Admin components
+import AdminDashboard from './components/admin/AdminDashboard';
+import ManageQuizzes from './components/admin/ManageQuizzes';
+import CreateQuiz from './components/admin/CreateQuiz';
+import EditQuiz from './components/admin/EditQuiz';
+import ManageQuestions from './components/admin/ManageQuestions';
+import ManageUsers from './components/admin/ManageUsers';
+import QuizStatistics from './components/admin/QuizStatistics';
 
 const App = () => {
   return (
-    <Router>
-      <ThemeProvider>
-        <AuthProvider>
-          <Layout>
+    <AuthProvider>
+      <Router>
+        <div className="flex flex-col min-h-screen">
+          <Navbar />
+          <main className="flex-grow container mx-auto px-4 py-6">
             <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Home />} />
+              {/* Public Routes */}
+              <Route path="/" element={<QuizList />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               
-              {/* Protected user routes */}
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
-              <Route path="/quizzes" element={
-                <ProtectedRoute>
-                  <QuizList />
-                </ProtectedRoute>
-              } />
-              <Route path="/quiz/:id" element={
-                <ProtectedRoute>
-                  <QuizDetails />
-                </ProtectedRoute>
-              } />
-              <Route path="/quiz/:id/take" element={
-                <ProtectedRoute>
-                  <TakeQuiz />
-                </ProtectedRoute>
-              } />
-              <Route path="/quiz/:id/results/:attemptId" element={
-                <ProtectedRoute>
-                  <QuizResults />
-                </ProtectedRoute>
-              } />
-              <Route path="/history" element={
-                <ProtectedRoute>
-                  <QuizHistory />
-                </ProtectedRoute>
-              } />
+              {/* Protected Routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/my-attempts" element={<UserAttempts />} />
+                <Route path="/attempts/:id" element={<AttemptDetail />} />
+                <Route path="/quiz/:id" element={<QuizDetail />} />
+                <Route path="/quiz/:id/take" element={<TakeQuiz />} />
+                <Route path="/quiz/results/:attemptId" element={<QuizResults />} />
+              </Route>
               
-              {/* Admin routes */}
-              <Route path="/admin" element={
-                <AdminRoute>
-                  <AdminDashboard />
-                </AdminRoute>
-              } />
-              <Route path="/admin/quizzes" element={
-                <AdminRoute>
-                  <ManageQuizzes />
-                </AdminRoute>
-              } />
-              <Route path="/admin/quizzes/create" element={
-                <AdminRoute>
-                  <CreateQuiz />
-                </AdminRoute>
-              } />
-              <Route path="/admin/quizzes/edit/:id" element={
-                <AdminRoute>
-                  <EditQuiz />
-                </AdminRoute>
-              } />
-              <Route path="/admin/users" element={
-                <AdminRoute>
-                  <ManageUsers />
-                </AdminRoute>
-              } />
+              {/* Admin Routes */}
+              <Route element={<AdminRoute />}>
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/quizzes" element={<ManageQuizzes />} />
+                <Route path="/admin/quizzes/create" element={<CreateQuiz />} />
+                <Route path="/admin/quizzes/:id/edit" element={<EditQuiz />} />
+                <Route path="/admin/quizzes/:id/questions" element={<ManageQuestions />} />
+                <Route path="/admin/quizzes/:id/statistics" element={<QuizStatistics />} />
+                <Route path="/admin/users" element={<ManageUsers />} />
+              </Route>
               
-              {/* 404 route */}
-              <Route path="*" element={<NotFound />} />
+              <Route path="*" element={<Navigate to="/" />} />
             </Routes>
-          </Layout>
-        </AuthProvider>
-      </ThemeProvider>
-    </Router>
+          </main>
+          <Footer />
+        </div>
+      </Router>
+      <ToastContainer position="top-right" autoClose={3000} />
+    </AuthProvider>
   );
 };
 
 export default App;
-              

@@ -134,7 +134,7 @@ exports.deleteQuiz = async (req, res) => {
     await Question.deleteMany({ quizId: quiz._id });
     
     // Delete the quiz
-    await quiz.remove();
+    await Quiz.findByIdAndDelete(quiz._id);
     
     res.json({ message: 'Quiz deleted successfully' });
   } catch (error) {

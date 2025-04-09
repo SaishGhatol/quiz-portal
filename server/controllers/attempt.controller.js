@@ -253,7 +253,7 @@ exports.getQuizStats = async (req, res) => {
     
     // Get average score from completed attempts
     const avgScoreResult = await Attempt.aggregate([
-      { $match: { quizId: mongoose.Types.ObjectId(quizId), completedAt: { $exists: true } } },
+      { $match: { quizId: new mongoose.Types.ObjectId(quizId), completedAt: { $exists: true } } },
       { $group: { _id: null, avgScore: { $avg: '$score' } } }
     ]);
     

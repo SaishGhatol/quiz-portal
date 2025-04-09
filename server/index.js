@@ -15,6 +15,7 @@ const attemptRoutes = require('./routes/attempt.routes');
 // Middleware
 const { authenticateJWT } = require('./middleware/auth.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
+const { configureSecurityMiddleware } = require('./middleware/security.middleware');
 
 // Config
 dotenv.config();
