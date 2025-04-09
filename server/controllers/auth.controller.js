@@ -138,7 +138,9 @@ exports.updateProfile = async (req, res) => {
   try {
     const { name, email, profilePicture } = req.body;
     const user = await User.findById(req.params.id);
-    
+    console.log("name",name);
+    console.log("email",email);
+    console.log("profilePicture",profilePicture);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
