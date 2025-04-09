@@ -208,9 +208,10 @@ exports.getUserAttempts = async (req, res) => {
 // Get attempt details
 exports.getAttemptDetails = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    const attempt = await Attempt.findById(id)
+    const { quizId } = req.params;
+
+
+    const attempt = await Attempt.findById(quizId)
       .populate('quizId', 'title category difficulty timeLimit passScore')
       .populate('answers.questionId');
     

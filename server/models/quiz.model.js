@@ -20,7 +20,7 @@ const quizSchema = new mongoose.Schema({
     required: true
   },
   timeLimit: {
-    type: Number, // in minutes
+    type: Number,
     required: true
   },
   passScore: {
