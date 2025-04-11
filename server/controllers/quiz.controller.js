@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Quiz = require('../models/quiz.model');
 const Question = require('../models/question.model');
 const Attempt = require('../models/attempt.model');
@@ -58,22 +59,26 @@ exports.getAllQuizzes = async (req, res) => {
 // Get quiz by ID with questions
 exports.getQuizById = async (req, res) => {
   try {
-    const quiz = await Quiz.findById(req.params.id)
-      .populate('createdBy', 'name');
-    
+    const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid quiz ID' });
+    }
+
+    const quiz = await Quiz.findById(id).populate('createdBy', 'name');
+
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz not found' });
     }
-    
-    // If not admin and quiz is inactive, deny access
+
     if (req.userRole !== 'admin' && !quiz.isActive) {
       return res.status(403).json({ message: 'This quiz is not currently available' });
     }
-    
-    // Get quiz questions
+
     const questions = await Question.find({ quizId: quiz._id })
       .select(req.userRole === 'admin' ? '+options.isCorrect' : '-options.isCorrect');
-    
+
     res.json({
       quiz,
       questions: req.userRole === 'admin' ? questions : questions.map(q => ({

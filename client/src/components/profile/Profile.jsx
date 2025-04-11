@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import AuthContext from '../../contexts/AuthContext';
 import api from '../../utils/api';
-import { User, Lock, Calendar, Shield, Camera, Save, Key, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { User, Lock, Calendar, Shield, Info, ChevronDown, ChevronUp, Key, Save } from 'lucide-react';
 
 const Profile = () => {
   const { currentUser, updateUser } = useContext(AuthContext);
@@ -12,13 +12,11 @@ const Profile = () => {
     email: currentUser?.email || '',
     currentPassword: '',
     newPassword: '',
-    confirmPassword: '',
-    profilePicture: currentUser?.profilePicture || ''
+    confirmPassword: ''
   });
   
   const [isLoading, setIsLoading] = useState(false);
   const [isPasswordChanging, setIsPasswordChanging] = useState(false);
-  const [previewImage, setPreviewImage] = useState(currentUser?.profilePicture || '');
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   
   useEffect(() => {
@@ -27,10 +25,8 @@ const Profile = () => {
       setFormData(prev => ({
         ...prev,
         name: currentUser.name || '',
-        email: currentUser.email || '',
-        profilePicture: currentUser.profilePicture || ''
+        email: currentUser.email || ''
       }));
-      setPreviewImage(currentUser.profilePicture || '');
     }
   }, [currentUser]);
   
@@ -40,11 +36,6 @@ const Profile = () => {
       ...prev,
       [name]: value
     }));
-    
-    // Update preview image when profilePicture URL changes
-    if (name === 'profilePicture') {
-      setPreviewImage(value);
-    }
   };
   
   const handleProfileUpdate = async (e) => {
@@ -55,10 +46,6 @@ const Profile = () => {
     
     if (formData.name !== currentUser.name) {
       updateData.name = formData.name;
-    }
-    
-    if (formData.profilePicture !== currentUser.profilePicture) {
-      updateData.profilePicture = formData.profilePicture;
     }
     
     // Don't update if nothing changed
@@ -320,37 +307,7 @@ const Profile = () => {
         </div>
         
         {/* Sidebar */}
-        <div className="md:col-span-0.5">
-          <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
-            <div className="border-b border-gray-100 p-4 flex items-center">
-              <Camera className="h-5 w-5 text-purple-500 mr-2" />
-              <h2 className="text-lg font-semibold text-gray-800">Profile Picture</h2>
-            </div>
-            
-            <div className="p-6 flex flex-col items-center">
-              <div className="w-32 h-32 rounded-full bg-gray-100 mb-4 overflow-hidden border-4 border-white shadow">
-                {previewImage ? (
-                  <img 
-                    src={previewImage} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.onerror = null; 
-                      e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${formData.name}`; // Fallback to placeholder
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
-                    <User className="h-16 w-16" />
-                  </div>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 text-center">
-                Enter a URL in the profile details section to update your profile picture
-              </p>
-            </div>
-          </div>
-          
+        <div className="md:col-span-1">
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
             <div className="border-b border-gray-100 p-4 flex items-center">
               <Info className="h-5 w-5 text-amber-500 mr-2" />

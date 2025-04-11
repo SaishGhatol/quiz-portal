@@ -11,7 +11,7 @@ const userRoutes = require('./routes/user.routes');
 const quizRoutes = require('./routes/quiz.routes');
 const questionRoutes = require('./routes/question.routes');
 const attemptRoutes = require('./routes/attempt.routes');
-
+const adminRoutes = require('./routes/admin.routes');
 // Middleware
 const { authenticateJWT } = require('./middleware/auth.middleware');
 const { errorHandler } = require('./middleware/error.middleware');
@@ -39,7 +39,7 @@ app.use('/api/users', authenticateJWT, userRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/questions', authenticateJWT, questionRoutes);
 app.use('/api/attempts', authenticateJWT, attemptRoutes);
-
+app.use('/api/admin', adminRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

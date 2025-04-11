@@ -20,6 +20,11 @@ const Navbar = () => {
   const getInitial = (name) => {
     return name ? name.charAt(0).toUpperCase() : 'U';
   };
+
+  // Get user avatar
+  const getUserAvatar = (name) => {
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${name}`;
+  };
   
   return (
     <nav className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
@@ -27,7 +32,7 @@ const Navbar = () => {
         <div className="flex justify-between items-center">
           <div className="flex items-center">
             <Link to="/" className="text-xl font-bold flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Quiz Portal
@@ -52,8 +57,12 @@ const Navbar = () => {
                     className="flex items-center focus:outline-none"
                   >
                     <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-blue-800 font-medium border-2 border-white">
-                        {getInitial(currentUser.name)}
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-800 font-medium overflow-hidden">
+                        <img 
+                          src={getUserAvatar(currentUser.name)}
+                          alt={currentUser.name}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <span className="mr-1 hidden lg:inline">{currentUser.name}</span>
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -64,9 +73,18 @@ const Navbar = () => {
                   
                   {isMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-1 z-10 border border-gray-200">
-                      <div className="px-4 py-3 border-b border-gray-200">
-                        <p className="text-sm text-gray-700 font-medium">{currentUser.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
+                      <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-800 font-medium overflow-hidden">
+                        <img 
+                          src={getUserAvatar(currentUser.name)}
+                          alt={currentUser.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                        <div>
+                          <p className="text-sm text-gray-700 font-medium">{currentUser.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
+                        </div>
                       </div>
                       <Link 
                         to="/profile" 
@@ -129,8 +147,12 @@ const Navbar = () => {
                 
                 <div className="border-t border-blue-500 my-2 pt-2">
                   <div className="flex items-center px-3 py-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-blue-800 font-medium border-2 border-white mr-3">
-                      {getInitial(currentUser.name)}
+                    <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+                      <img 
+                        src={getUserAvatar(currentUser.name)}
+                        alt={currentUser.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div>
                       <p className="font-medium">{currentUser.name}</p>
