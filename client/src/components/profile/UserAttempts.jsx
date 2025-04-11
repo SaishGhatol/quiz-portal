@@ -22,12 +22,19 @@ const UserAttempts = () => {
         params.append('sortBy', filters.sortBy);
         params.append('sortOrder', filters.sortOrder);
         
+        // Make the API call with the query parameters
         const response = await api.get(`/attempts/my-attempts?${params}`);
-        setAttempts(response.data.attempts);
+        setAttempts(response.data.attempts || []);
         setError(null);
       } catch (error) {
         console.error('Error fetching attempts:', error);
-        setError('Failed to load your quiz attempts. Please try again later.');
+        // Handle 404 differently - if it's "Attempt not found" we just set empty array
+        if (error.response && error.response.status === 404 && 
+            error.response.data && error.response.data.message === 'Attempt not found') {
+          setAttempts([]);
+        } else {
+          setError('Failed to load your quiz attempts. Please try again later.');
+        }
       } finally {
         setLoading(false);
       }
@@ -129,51 +136,61 @@ const UserAttempts = () => {
       {attempts.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <p className="text-gray-500 mb-4">You haven't taken any quizzes yet.</p>
-          <Link to="/" className="text-blue-500 hover:text-blue-700">
+          <Link to="/quizzes" className="text-blue-500 hover:text-blue-700">
             Browse available quizzes
           </Link>
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {attempts.map((attempt) => (
-                <tr key={attempt._id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{attempt.quiz.title}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">{attempt.quiz.category}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">{formatDate(attempt.createdAt)}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getScoreBadgeColor(attempt.score)}`}>
-                      {attempt.score}%
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Link to={`/attempts/${attempt._id}`} className="text-blue-600 hover:text-blue-900 mr-4">
-                      View Details
-                    </Link>
-                    <Link to={`/quiz/${attempt.quiz._id}`} className="text-blue-600 hover:text-blue-900">
-                      Retake Quiz
-                    </Link>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {attempts.map((attempt) => (
+                  <tr key={attempt._id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {attempt.quiz?.title || 'Untitled Quiz'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {attempt.quiz?.category || 'Uncategorized'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-500">
+                        {formatDate(attempt.createdAt)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getScoreBadgeColor(attempt.score)}`}>
+                        {attempt.score}%
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <Link to={`/attempts/${attempt._id}`} className="text-blue-600 hover:text-blue-900 mr-4">
+                        View Details
+                      </Link>
+                      {attempt.quiz?._id && (
+                        <Link to={`/quiz/${attempt.quiz._id}`} className="text-blue-600 hover:text-blue-900">
+                          Retake Quiz
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

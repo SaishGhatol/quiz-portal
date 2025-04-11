@@ -23,6 +23,7 @@ const QuizDetail = () => {
         
         // If user is logged in, fetch their attempts for this quiz
         if (currentUser) {
+          // Changed endpoint to include the quiz ID as a query parameter
           const attemptsResponse = await api.get(`/attempts/my-attempts?quiz=${id}`);
           setUserAttempts(attemptsResponse.data.attempts);
         }
@@ -30,7 +31,17 @@ const QuizDetail = () => {
         setError(null);
       } catch (error) {
         console.error('Error fetching quiz:', error);
-        setError('Failed to load quiz. Please try again later.');
+        if (error.response && error.response.status === 404) {
+          // Handle the specific 404 error
+          if (error.response.data.message === 'Attempt not found') {
+            // Set empty attempts array instead of throwing an error
+            setUserAttempts([]);
+          } else {
+            setError('Quiz not found. Please check the URL and try again.');
+          }
+        } else {
+          setError('Failed to load quiz. Please try again later.');
+        }
       } finally {
         setLoading(false);
       }
@@ -101,7 +112,7 @@ const QuizDetail = () => {
             
             <div className="bg-gray-50 p-4 rounded-md">
               <div className="text-sm text-gray-500">Number of Questions</div>
-              <div className="font-medium">{quiz.questions?.length || 0}</div>
+              <div className="font-medium">{quiz.totalQuestions || 0}</div>
             </div>
             
             <div className="bg-gray-50 p-4 rounded-md">
@@ -120,7 +131,7 @@ const QuizDetail = () => {
               </button>
               
               {/* User's previous attempts */}
-              {userAttempts.length > 0 && (
+              {userAttempts.length > 0 ? (
                 <div className="mt-8">
                   <h2 className="text-xl font-bold mb-4">Your Previous Attempts</h2>
                   <div className="bg-white shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
@@ -166,6 +177,10 @@ const QuizDetail = () => {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              ) : (
+                <div className="mt-8 bg-gray-50 p-4 rounded-md">
+                  <p className="text-gray-600">You haven't attempted this quiz yet.</p>
                 </div>
               )}
             </div>

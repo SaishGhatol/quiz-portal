@@ -18,19 +18,38 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
+      
       try {
-        const statsResponse = await api.get('/admin/dashboard/stats');
-        setStats(statsResponse.data);
+        // Handle stats individually with error handling
+        try {
+          const statsResponse = await api.get('/admin/dashboard/stats'); // Fixed endpoint path
+          setStats(statsResponse.data);
+        } catch (statsError) {
+          console.error('Error fetching dashboard stats:', statsError);
+          // Keep default stats values if fetch fails
+        }
         
-        const quizzesResponse = await api.get('/admin/quizzes?limit=5');
-        setRecentQuizzes(quizzesResponse.data.quizzes);
+        // Handle quizzes fetch with separate error handling
+        try {
+          const quizzesResponse = await api.get('/admin/quizzes?limit=5'); // Fixed endpoint path
+          setRecentQuizzes(quizzesResponse.data.quizzes);
+        } catch (quizzesError) {
+          console.error('Error fetching recent quizzes:', quizzesError);
+          setRecentQuizzes([]);
+        }
         
-        const attemptsResponse = await api.get('/admin/attempts?limit=5');
-        setRecentAttempts(attemptsResponse.data.attempts);
+        // Handle attempts fetch with separate error handling
+        try {
+          const attemptsResponse = await api.get('/admin/attempts?limit=5'); // Fixed endpoint path
+          setRecentAttempts(attemptsResponse.data.attempts);
+        } catch (attemptsError) {
+          console.error('Error fetching recent attempts:', attemptsError);
+          setRecentAttempts([]);
+        }
         
         setError(null);
       } catch (error) {
-        console.error('Error fetching admin dashboard data:', error);
+        console.error('Error in fetchDashboardData:', error);
         setError('Failed to load dashboard data. Please try again later.');
       } finally {
         setLoading(false);
@@ -138,50 +157,74 @@ const AdminDashboard = () => {
         {/* Recent Quizzes */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">Recent Quizzes</h2>
-          <div className="space-y-4">
-            {recentQuizzes.map(quiz => (
-              <div key={quiz._id} className="border-b pb-4 last:border-b-0">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{quiz.title}</h3>
-                    <p className="text-sm text-gray-500">
-                      Created by {quiz.author?.name || 'Unknown'} • {formatDate(quiz.createdAt)}
-                    </p>
+          {recentQuizzes.length > 0 ? (
+            <div className="space-y-4">
+              {recentQuizzes.map(quiz => (
+                <div key={quiz._id} className="border-b pb-4 last:border-b-0">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="font-medium">{quiz.title}</h3>
+                      <p className="text-sm text-gray-500">
+                        Created by {quiz.author?.name || 'Unknown'} • {formatDate(quiz.createdAt)}
+                      </p>
+                    </div>
+                    <Link 
+                      to={`/admin/quizzes/${quiz._id}`}
+                      className="text-blue-500 hover:text-blue-600 text-sm"
+                    >
+                      View →
+                    </Link>
                   </div>
-                  <Link 
-                    to={`/admin/quizzes/${quiz._id}`}
-                    className="text-blue-500 hover:text-blue-600 text-sm"
-                  >
-                    View →
-                  </Link>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-4">No recent quizzes found</p>
+          )}
+          <div className="mt-4 text-right">
+            <Link 
+              to="/admin/quizzes" 
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
+              View All Quizzes
+            </Link>
           </div>
         </div>
 
         {/* Recent Attempts */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">Recent Attempts</h2>
-          <div className="space-y-4">
-            {recentAttempts.map(attempt => (
-              <div key={attempt._id} className="border-b pb-4 last:border-b-0">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium">{attempt.user?.name || 'Anonymous'}</h3>
-                    <p className="text-sm text-gray-500">
-                      {attempt.quiz?.title} • Score: {attempt.score}% • {formatDate(attempt.completedAt)}
-                    </p>
+          {recentAttempts.length > 0 ? (
+            <div className="space-y-4">
+              {recentAttempts.map(attempt => (
+                <div key={attempt._id} className="border-b pb-4 last:border-b-0">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="font-medium">{attempt.user?.name || 'Anonymous'}</h3>
+                      <p className="text-sm text-gray-500">
+                        {attempt.quiz?.title} • Score: {attempt.score}% • {formatDate(attempt.completedAt)}
+                      </p>
+                    </div>
+                    <Link
+                      to={`/admin/attempts/${attempt._id}`}
+                      className="text-blue-500 hover:text-blue-600 text-sm"
+                    >
+                      Details →
+                    </Link>
                   </div>
-                  <Link
-                    to={`/admin/attempts/${attempt._id}`}
-                    className="text-blue-500 hover:text-blue-600 text-sm"
-                  >
-                    Details →
-                  </Link>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-4">No recent attempts found</p>
+          )}
+          <div className="mt-4 text-right">
+            <Link 
+              to="/admin/attempts" 
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
+              View All Attempts
+            </Link>
           </div>
         </div>
       </div>

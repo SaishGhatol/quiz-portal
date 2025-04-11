@@ -49,7 +49,7 @@ exports.createQuestion = async (req, res) => {
 exports.getQuestionsByQuiz = async (req, res) => {
   try {
     const { quizId } = req.params;
-    
+
     // Validate quiz exists
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {

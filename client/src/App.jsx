@@ -7,7 +7,10 @@ import { ToastContainer } from 'react-toastify';
 
 // Layout components
 import Navbar from './components/layout/Navbar';
-import Footer from './components/layout/Footer';
+import Footer from './components/layout/Footer/Footer';
+import TermsPage from './components/layout/Footer/TermsPage';
+import PrivacyPage from './components/layout/Footer/PrivacyPage';
+import ContactPage from './components/layout/Footer/ContactPage';
 
 // Auth components
 import Login from './components/auth/Login';
@@ -71,8 +74,14 @@ const App = () => {
                 <Route path="/admin/users" element={<ManageUsers />} />
               </Route> 
               
+              <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/contact" element={<ContactPage />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
+
+    
+          
           </main>
           <Footer />
         </div>

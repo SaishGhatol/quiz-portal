@@ -1,18 +1,38 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import AuthContext from '../../contexts/AuthContext';
+import api from '../../utils/api';
+import { User, Lock, Calendar, Shield, Camera, Save, Key, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
 const Profile = () => {
-  const { currentUser, updateProfile } = useContext(AuthContext);
+  const { currentUser, updateUser } = useContext(AuthContext);
   
   const [formData, setFormData] = useState({
-    name: currentUser.name,
-    email: currentUser.email,
-    password: '',
-    confirmPassword: ''
+    name: currentUser?.name || '',
+    email: currentUser?.email || '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+    profilePicture: currentUser?.profilePicture || ''
   });
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+  const [previewImage, setPreviewImage] = useState(currentUser?.profilePicture || '');
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  
+  useEffect(() => {
+    // Update form data when currentUser changes
+    if (currentUser) {
+      setFormData(prev => ({
+        ...prev,
+        name: currentUser.name || '',
+        email: currentUser.email || '',
+        profilePicture: currentUser.profilePicture || ''
+      }));
+      setPreviewImage(currentUser.profilePicture || '');
+    }
+  }, [currentUser]);
   
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -20,33 +40,25 @@ const Profile = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Update preview image when profilePicture URL changes
+    if (name === 'profilePicture') {
+      setPreviewImage(value);
+    }
   };
   
-  const handleSubmit = async (e) => {
+  const handleProfileUpdate = async (e) => {
     e.preventDefault();
     
-    // Validate passwords if user is trying to update password
-    if (formData.password) {
-      if (formData.password !== formData.confirmPassword) {
-        toast.error('Passwords do not match');
-        return;
-      }
-      
-      if (formData.password.length < 6) {
-        toast.error('Password must be at least 6 characters');
-        return;
-      }
-    }
-    
-    // Prepare data for update (only send changed fields)
+    // Prepare data for profile update
     const updateData = {};
     
     if (formData.name !== currentUser.name) {
       updateData.name = formData.name;
     }
     
-    if (formData.password) {
-      updateData.password = formData.password;
+    if (formData.profilePicture !== currentUser.profilePicture) {
+      updateData.profilePicture = formData.profilePicture;
     }
     
     // Don't update if nothing changed
@@ -58,107 +70,321 @@ const Profile = () => {
     setIsLoading(true);
     
     try {
-      await updateProfile(updateData);
-      toast.success('Profile updated successfully');
+      // Make API call to update profile
+      const response = await api.put(`/users/${currentUser.id}`, updateData);
       
-      // Reset password fields
-      setFormData(prev => ({
-        ...prev,
-        password: '',
-        confirmPassword: ''
-      }));
+      // Update user in context
+      if (updateUser && typeof updateUser === 'function') {
+        updateUser(response.data.user);
+      }
+      
+      toast.success('Profile updated successfully');
     } catch (error) {
+      console.error('Profile update error:', error);
       toast.error(error.response?.data?.message || 'Failed to update profile');
     } finally {
       setIsLoading(false);
     }
   };
   
-  return (
-    <div className="max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Your Profile</h1>
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    
+    // Validate passwords
+    if (formData.newPassword !== formData.confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    
+    if (formData.newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (!formData.currentPassword) {
+      toast.error('Current password is required');
+      return;
+    }
+    
+    setIsPasswordChanging(true);
+    
+    try {
+      // Make API call to change password
+      await api.put(`/users/${currentUser.id}/password`, {
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword
+      });
       
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">
-              Name
-            </label>
-            <input
-              id="name"
-              name="name"
-              type="text"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-100"
-              value={formData.email}
-              disabled
-            />
-            <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="password">
-              New Password (leave blank to keep current password)
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              value={formData.password}
-              onChange={handleChange}
-              minLength={6}
-            />
-          </div>
-          
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="confirmPassword">
-              Confirm New Password
-            </label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              minLength={6}
-            />
-          </div>
-          
-          <button
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Saving...' : 'Save Changes'}
-          </button>
-        </form>
+      toast.success('Password changed successfully');
+      
+      // Reset password fields
+      setFormData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
+      
+      // Hide the password section after successful change
+      setShowPasswordSection(false);
+    } catch (error) {
+      console.error('Password change error:', error);
+      toast.error(error.response?.data?.message || 'Failed to change password');
+    } finally {
+      setIsPasswordChanging(false);
+    }
+  };
+  
+  const togglePasswordSection = () => {
+    setShowPasswordSection(!showPasswordSection);
+  };
+  
+  if (!currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="w-16 h-16 bg-gray-200 rounded-full mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-48 mb-2"></div>
+          <div className="h-3 bg-gray-200 rounded w-32"></div>
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="text-center mb-10">
+        <h1 className="text-3xl font-extrabold text-gray-900 mb-1">Your Profile</h1>
+        <p className="text-gray-600">Manage your account information and settings</p>
       </div>
       
-      <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4">Account Information</h2>
-        <div className="space-y-2">
-          <p>
-            <span className="font-semibold">Account Type:</span> {currentUser.role === 'admin' ? 'Administrator' : 'User'}
-          </p>
-          <p>
-            <span className="font-semibold">Joined:</span> {new Date(currentUser.createdAt).toLocaleDateString()}
-          </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Profile Details Section */}
+        <div className="md:col-span-2">
+          <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+            <div className="border-b border-gray-100 p-4 flex items-center">
+              <User className="h-5 w-5 text-blue-500 mr-2" />
+              <h2 className="text-lg font-semibold text-gray-800">Profile Details</h2>
+            </div>
+            
+            <form onSubmit={handleProfileUpdate} className="p-6">
+              <div className="mb-6">
+                <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="name">
+                  Full Name
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text" 
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  placeholder="Your full name"
+                />
+              </div>
+              
+              <div className="mb-6">
+                <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="email">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                    value={formData.email}
+                    disabled
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <Info className="h-4 w-4 text-gray-400" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Email cannot be changed for security reasons</p>
+              </div>
+              
+              <div className="flex flex-col space-y-3">
+                <button
+                  type="submit"
+                  className="w-full flex justify-center items-center bg-blue-600 text-white p-3 rounded-lg font-medium hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-5 w-5 mr-2" />
+                      Save Changes
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={togglePasswordSection}
+                  className="w-full flex justify-center items-center bg-gray-100 text-gray-800 p-3 rounded-lg font-medium hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2"
+                >
+                  <Lock className="h-5 w-5 mr-2" />
+                  {showPasswordSection ? 'Hide Password Section' : 'Change Password'}
+                  {showPasswordSection ? (
+                    <ChevronUp className="h-4 w-4 ml-2" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 ml-2" />
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+          
+          {/* Password Change Section - Conditionally rendered */}
+          {showPasswordSection && (
+            <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6 transition-all duration-300">
+              <div className="border-b border-gray-100 p-4 flex items-center">
+                <Key className="h-5 w-5 text-green-500 mr-2" />
+                <h2 className="text-lg font-semibold text-gray-800">Change Password</h2>
+              </div>
+              
+              <form onSubmit={handlePasswordChange} className="p-6">
+                <div className="mb-6">
+                  <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="currentPassword">
+                    Current Password
+                  </label>
+                  <input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type="password"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    value={formData.currentPassword}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <div className="mb-6">
+                  <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="newPassword">
+                    New Password
+                  </label>
+                  <input
+                    id="newPassword"
+                    name="newPassword"
+                    type="password"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    value={formData.newPassword}
+                    onChange={handleChange}
+                    minLength={6}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
+                </div>
+                
+                <div className="mb-6">
+                  <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="confirmPassword">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    minLength={6}
+                    required
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full flex justify-center items-center bg-green-600 text-white p-3 rounded-lg font-medium hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                  disabled={isPasswordChanging}
+                >
+                  {isPasswordChanging ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Key className="h-5 w-5 mr-2" />
+                      Update Password
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+        
+        {/* Sidebar */}
+        <div className="md:col-span-0.5">
+          <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
+            <div className="border-b border-gray-100 p-4 flex items-center">
+              <Camera className="h-5 w-5 text-purple-500 mr-2" />
+              <h2 className="text-lg font-semibold text-gray-800">Profile Picture</h2>
+            </div>
+            
+            <div className="p-6 flex flex-col items-center">
+              <div className="w-32 h-32 rounded-full bg-gray-100 mb-4 overflow-hidden border-4 border-white shadow">
+                {previewImage ? (
+                  <img 
+                    src={previewImage} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null; 
+                      e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${formData.name}`; // Fallback to placeholder
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
+                    <User className="h-16 w-16" />
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 text-center">
+                Enter a URL in the profile details section to update your profile picture
+              </p>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <div className="border-b border-gray-100 p-4 flex items-center">
+              <Info className="h-5 w-5 text-amber-500 mr-2" />
+              <h2 className="text-lg font-semibold text-gray-800">Account Info</h2>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="flex items-center">
+                <Shield className="h-5 w-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Account Type</p>
+                  <p className="font-medium text-gray-800">
+                    {currentUser.role === 'admin' ? 'Administrator' : 'Standard User'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center">
+                <Calendar className="h-5 w-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm text-gray-500">Member Since</p>
+                  <p className="font-medium text-gray-800">
+                    {currentUser.createdAt 
+                      ? new Date(currentUser.createdAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

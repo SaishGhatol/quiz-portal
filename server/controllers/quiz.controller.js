@@ -146,68 +146,47 @@ exports.deleteQuiz = async (req, res) => {
 // Submit quiz attempt
 exports.submitQuizAttempt = async (req, res) => {
   try {
-    const { quizId, answers } = req.body;
-    
-    // Find the quiz
-    const quiz = await Quiz.findById(quizId);
-    if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
+    const { id: quizId } = req.params;
+    const { answers } = req.body;
+
+    if (!answers || !Array.isArray(answers)) {
+      return res.status(400).json({ message: 'Answers are required' });
     }
-    
-    // Get all questions for this quiz
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
+
     const questions = await Question.find({ quizId });
-    
-    // Calculate score
+
     let score = 0;
-    const maxScore = questions.reduce((total, q) => total + q.points, 0);
-    
+    let maxScore = 0;
     const processedAnswers = [];
-    
-    // Process each answer
-    for (const answer of answers) {
-      const question = questions.find(q => q._id.toString() === answer.questionId);
-      
-      if (!question) continue;
-      
+
+    for (const question of questions) {
+      const userAnswer = answers.find(a => a.questionId === question._id.toString());
+      maxScore += question.points;
+
+      if (!userAnswer) continue;
+
+      const correctOptions = question.options.filter(o => o.isCorrect).map(o => o.text);
+      const selectedOption = question.options.find(o => o._id.toString() === userAnswer.selectedOptionId);
+
       let isCorrect = false;
-      let pointsEarned = 0;
-      
-      // Check if answer is correct based on question type
-      if (question.type === 'single' || question.type === 'truefalse') {
-        // Find the correct option
-        const correctOption = question.options.find(opt => opt.isCorrect);
-        isCorrect = correctOption && answer.selectedAnswer === correctOption.text;
-      } else if (question.type === 'multiple') {
-        // For multiple choice, all correct options must be selected and no incorrect ones
-        const correctOptions = question.options.filter(opt => opt.isCorrect).map(opt => opt.text);
-        const selectedAnswers = Array.isArray(answer.selectedAnswer) ? answer.selectedAnswer : [answer.selectedAnswer];
-        
-        // Check if selected answers match correct answers exactly
-        isCorrect = 
-          correctOptions.length === selectedAnswers.length && 
-          correctOptions.every(opt => selectedAnswers.includes(opt));
-      } else if (question.type === 'text') {
-        // For text input, compare with accepted answers (case insensitive)
-        const correctAnswer = question.options.find(opt => opt.isCorrect).text.toLowerCase();
-        isCorrect = answer.selectedAnswer.toLowerCase() === correctAnswer;
+      if (selectedOption && correctOptions.includes(selectedOption.text)) {
+        score += question.points;
+        isCorrect = true;
       }
-      
-      // Award points if correct
-      if (isCorrect) {
-        pointsEarned = question.points;
-        score += pointsEarned;
-      }
-      
+
       processedAnswers.push({
         questionId: question._id,
-        selectedAnswer: answer.selectedAnswer,
+        selectedAnswer: selectedOption?.text,
         isCorrect,
-        pointsEarned
+        pointsEarned: isCorrect ? question.points : 0
       });
     }
-    
-    // Create attempt record
-    const attempt = new Attempt({
+
+    const Attempt = require('../models/attempt.model');
+    const attempt = await Attempt.create({
       userId: req.userId,
       quizId,
       score,
@@ -215,23 +194,17 @@ exports.submitQuizAttempt = async (req, res) => {
       completedAt: new Date(),
       answers: processedAnswers
     });
-    
-    const savedAttempt = await attempt.save();
-    
-    // Update quiz attempt count
+
     quiz.totalAttempts += 1;
     await quiz.save();
-    
-    res.json({
+
+    res.status(201).json({
       message: 'Quiz submitted successfully',
-      attempt: {
-        id: savedAttempt._id,
-        score,
-        maxScore,
-        percentage: (score / maxScore) * 100,
-        passed: (score / maxScore) * 100 >= quiz.passScore
-      }
+      attemptId: attempt._id,
+      score,
+      maxScore
     });
+
   } catch (error) {
     console.error('Submit quiz error:', error);
     res.status(500).json({ message: 'Server error submitting quiz' });
@@ -241,26 +214,31 @@ exports.submitQuizAttempt = async (req, res) => {
 // Get user's quiz attempt details
 exports.getQuizAttemptById = async (req, res) => {
   try {
-    const attempt = await Attempt.findById(req.params.id)
-      .populate('quizId', 'title passScore')
-      .populate('answers.questionId');
+    const quizId = req.params.id;
     
-    if (!attempt) {
-      return res.status(404).json({ message: 'Attempt not found' });
+    // Special case for 'all'
+    if (quizId === 'all') {
+      const quizzes = await Quiz.find({})
+        .populate('author', 'name email')
+        .exec();
+      return res.status(200).json({ success: true, quizzes });
     }
     
-    // Only allow the user who made the attempt or an admin to view it
-    if (attempt.userId.toString() !== req.userId && req.userRole !== 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
+    // Regular case for specific quiz ID
+    const quiz = await Quiz.findById(quizId)
+      .populate('author', 'name email')
+      .exec();
+    
+    if (!quiz) {
+      return res.status(404).json({ success: false, message: 'Quiz not found' });
     }
     
-    res.json({ attempt });
+    res.status(200).json({ success: true, quiz });
   } catch (error) {
-    console.error('Get attempt error:', error);
-    res.status(500).json({ message: 'Server error fetching attempt' });
+    console.error('Get quiz error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // Get all attempts for a user
 exports.getUserAttempts = async (req, res) => {
   try {

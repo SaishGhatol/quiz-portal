@@ -194,16 +194,23 @@ exports.completeAttempt = async (req, res) => {
 // Get attempts by user
 exports.getUserAttempts = async (req, res) => {
   try {
-    const attempts = await Attempt.find({ userId: req.userId })
+    const query = { userId: req.userId };
+    if (req.query.quiz) {
+      query.quizId = req.query.quiz;
+    }
+
+    const attempts = await Attempt.find(query)
       .populate('quizId', 'title category difficulty')
-      .sort({ startedAt: -1 });
-    
+      .select('-answers')
+      .sort({ createdAt: -1 });
+
     res.json({ attempts });
   } catch (error) {
     console.error('Get user attempts error:', error);
-    res.status(500).json({ message: 'Server error while fetching attempts' });
+    res.status(500).json({ message: 'Server error fetching attempts' });
   }
 };
+
 
 // Get attempt details
 exports.getAttemptDetails = async (req, res) => {

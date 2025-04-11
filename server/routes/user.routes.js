@@ -1,10 +1,12 @@
 const express = require('express');
 const userController = require('../controllers/auth.controller');
 const { authenticateJWT, isAdmin } = require('../middleware/auth.middleware');
+const { getDashboard } = require('../controllers/user.controller');
 
 const router = express.Router();
 
 // User routes
+router.get('/dashboard', authenticateJWT, getDashboard);
 router.get('/', authenticateJWT, isAdmin, userController.getAllUsers);
 router.get('/:id', authenticateJWT, userController.getUserProfile);
 router.put('/:id', authenticateJWT, userController.updateProfile);

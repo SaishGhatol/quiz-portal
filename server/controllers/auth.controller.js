@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 // Register new user
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role  } = req.body;
     
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -16,7 +16,8 @@ exports.register = async (req, res) => {
     const user = new User({
       name,
       email,
-      password
+      password,
+      role 
     });
     
     await user.save();
@@ -24,7 +25,7 @@ exports.register = async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET || 'quiz-portal-secret',
+      process.env.JWT_SECRET || 'quiz-portal-secret-123',
       { expiresIn: '24h' }
     );
     
@@ -122,7 +123,15 @@ exports.getAllUsers = async (req, res) => {
 // Get user profile by ID
 exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const userId = req.params.id;
+    
+    // Check if the ID is a valid MongoDB ObjectId
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+    
+    const user = await User.findById(userId).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }

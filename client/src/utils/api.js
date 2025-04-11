@@ -1,26 +1,27 @@
-// src/utils/api.js
 import axios from 'axios';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
 });
 
-// Add token to requests if it exists
-const token = localStorage.getItem('token');
-if (token) {
-  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-}
+// 🔁 Request interceptor to always attach the latest token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token'); // fetch latest token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-// Response interceptor for handling errors
+// ❗ Response interceptor for token expiration
 api.interceptors.response.use(
-  response => response,
-  error => {
-    // Handle token expiration
+  (response) => response,
+  (error) => {
     if (error.response && error.response.status === 401) {
       if (error.response.data.message === 'Token has expired, please login again') {
         localStorage.removeItem('token');
