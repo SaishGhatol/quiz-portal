@@ -4,6 +4,7 @@ import api from '../../utils/api';
 
 const QuizResults = () => {
   const { attemptId } = useParams();
+  console.log('Attempt ID:', attemptId);
   
   const [attempt, setAttempt] = useState(null);
   const [quiz, setQuiz] = useState(null);

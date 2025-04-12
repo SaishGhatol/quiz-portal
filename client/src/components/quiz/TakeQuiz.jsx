@@ -109,20 +109,27 @@ const TakeQuiz = () => {
 
   const submitQuiz = async () => {
     try {
-      // Convert answers object to array of {questionId, selectedOptionId} objects
-      const formattedAnswers = Object.entries(answers).map(([questionId, optionId]) => ({
-        questionId,
-        selectedOptionId: optionId
-      }));
-
+      // Only include questions that have been answered
+      const formattedAnswers = Object.entries(answers)
+        .filter(([_, optionId]) => optionId !== null)
+        .map(([questionId, optionId]) => ({
+          questionId,
+          selectedOptionId: optionId
+        }));
+  
+      console.log('Submitting answers:', formattedAnswers);
+  
       const response = await api.post(`/quizzes/${id}/submit`, {
         answers: formattedAnswers
       });
-
+  
+      toast.success('Quiz submitted successfully!');
       navigate(`/quiz/results/${response.data.attemptId}`);
     } catch (error) {
       console.error('Error submitting quiz:', error);
-      toast.error('Failed to submit quiz. Please try again.');
+      // Show more detailed error if available
+      const errorMessage = error.response?.data?.message || 'Failed to submit quiz. Please try again.';
+      toast.error(errorMessage);
     }
   };
 

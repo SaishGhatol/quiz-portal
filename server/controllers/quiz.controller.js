@@ -148,21 +148,44 @@ exports.deleteQuiz = async (req, res) => {
   }
 };
 
-// Submit quiz attempt
 exports.submitQuizAttempt = async (req, res) => {
   try {
+    // Extract quiz ID from route parameters and answers from request body
     const { id: quizId } = req.params;
     const { answers } = req.body;
+    
+    // Debug logs to help with troubleshooting
+    console.log('Quiz submission attempt:');
+    console.log('- Quiz ID:', quizId);
+    console.log('- User ID:', req.userId);
+    console.log('- Answers count:', answers?.length || 0);
 
-    if (!answers || !Array.isArray(answers)) {
-      return res.status(400).json({ message: 'Answers are required' });
+    // Validate required inputs
+    if (!quizId) {
+      return res.status(400).json({ message: 'Quiz ID is required' });
+    }
+    
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Authentication required' });
     }
 
+    if (!answers || !Array.isArray(answers)) {
+      return res.status(400).json({ message: 'Answers are required and must be an array' });
+    }
+
+    // Find the quiz by ID
     const quiz = await Quiz.findById(quizId);
-    if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
 
+    // Get all questions for this quiz
     const questions = await Question.find({ quizId });
+    if (!questions.length) {
+      return res.status(404).json({ message: 'No questions found for this quiz' });
+    }
 
+    // Process answers and calculate score
     let score = 0;
     let maxScore = 0;
     const processedAnswers = [];
@@ -184,71 +207,82 @@ exports.submitQuizAttempt = async (req, res) => {
 
       processedAnswers.push({
         questionId: question._id,
-        selectedAnswer: selectedOption?.text,
+        selectedAnswer: selectedOption?.text || '',
         isCorrect,
         pointsEarned: isCorrect ? question.points : 0
       });
     }
 
+    // Create the attempt record - using correct field names from schema
     const Attempt = require('../models/attempt.model');
     const attempt = await Attempt.create({
-      userId: req.userId,
-      quizId,
+      user: req.userId,  // Match schema field name 'user'
+      quiz: quizId,      // Match schema field name 'quiz'
       score,
       maxScore,
       completedAt: new Date(),
       answers: processedAnswers
     });
 
+    // Update quiz statistics
     quiz.totalAttempts += 1;
     await quiz.save();
 
-    res.status(201).json({
+    // Return success response
+    return res.status(201).json({
       message: 'Quiz submitted successfully',
       attemptId: attempt._id,
       score,
-      maxScore
+      maxScore,
+      percentageScore: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
     });
 
   } catch (error) {
     console.error('Submit quiz error:', error);
-    res.status(500).json({ message: 'Server error submitting quiz' });
+    
+    // Handle specific errors
+    if (error.name === 'ValidationError') {
+      console.error('Validation error details:', JSON.stringify(error.errors));
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        details: Object.keys(error.errors).map(key => ({
+          field: key,
+          message: error.errors[key].message
+        }))
+      });
+    }
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({ message: `Invalid ${error.path}: ${error.value}` });
+    }
+    
+    // General server error
+    return res.status(500).json({ 
+      message: 'Server error submitting quiz',
+      error: error.message
+    });
   }
 };
 
-// Get user's quiz attempt details
 exports.getQuizAttemptById = async (req, res) => {
   try {
-    const quizId = req.params.id;
-    
-    // Special case for 'all'
-    if (quizId === 'all') {
-      const quizzes = await Quiz.find({})
-        .populate('author', 'name email')
-        .exec();
-      return res.status(200).json({ success: true, quizzes });
+    const attempt = await Quiz.findById(req.params.id).populate('quiz');
+
+    if (!attempt) {
+      return res.status(404).json({ message: 'Attempt not found' });
     }
-    
-    // Regular case for specific quiz ID
-    const quiz = await Quiz.findById(quizId)
-      .populate('author', 'name email')
-      .exec();
-    
-    if (!quiz) {
-      return res.status(404).json({ success: false, message: 'Quiz not found' });
-    }
-    
-    res.status(200).json({ success: true, quiz });
+    res.json({ attempt, quiz: attempt.quiz });
   } catch (error) {
-    console.error('Get quiz error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
+
 // Get all attempts for a user
 exports.getUserAttempts = async (req, res) => {
   try {
     const attempts = await Attempt.find({ userId: req.userId })
-      .populate('quizId', 'title category difficulty')
+      .populate('quizId', 'title category difficulty').exec()
       .select('-answers')
       .sort({ createdAt: -1 });
     
@@ -259,7 +293,7 @@ exports.getUserAttempts = async (req, res) => {
   }
 };
 
-const getQuizStatistics = async (req, res) => {
+exports.getQuizStatistics = async (req, res) => {
   try {
     const quizId = req.params.id;
 
@@ -330,7 +364,7 @@ const getQuizStatistics = async (req, res) => {
   }
 };
 
-const getRecentAttemptsByQuizId = async (req, res) => {
+exports.getRecentAttemptsByQuizId = async (req, res) => {
   try {
     const quizId = req.params.id;
     const limit = parseInt(req.query.limit) || 10;
@@ -364,15 +398,4 @@ const getRecentAttemptsByQuizId = async (req, res) => {
     res.status(500).json({ message: 'Error fetching attempts', error: err.message });
   }
 };
-module.exports = {
-  createQuiz,
-  getAllQuizzes,
-  getQuizById,
-  updateQuiz,
-  deleteQuiz,
-  submitQuizAttempt,
-  getQuizAttemptById,
-  getUserAttempts,
-  getQuizStatistics,
-  getRecentAttemptsByQuizId,
-};
+

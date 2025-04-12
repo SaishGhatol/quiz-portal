@@ -7,18 +7,16 @@ const { authenticateJWT, isAdmin } = require('../middleware/auth.middleware');
 // Public routes
 router.get('/', quizController.getAllQuizzes);
 
-// Important: place before `/:id` routes
-router.get('/:id/questions', authenticateJWT, quizController.getQuizById);
-router.get('/:id', authenticateJWT, quizController.getQuizById);
+// Routes for quiz attempts (placed early to avoid conflicts with '/:id')
+router.get('/attempts/:id', authenticateJWT, quizController.getQuizAttemptById);
+router.post('/:id/submit', authenticateJWT, quizController.submitQuizAttempt);
+router.get('/:id/attempts', authenticateJWT, quizController.getRecentAttemptsByQuizId);
+router.get('/:id/statistics', authenticateJWT, quizController.getQuizStatistics);
+router.get('/:id/questions', authenticateJWT, quizController.getQuizById); // Specific route
 
-// Admin routes
-router.post('/', authenticateJWT, isAdmin, quizController.createQuiz);
+// Quiz details routes (must be after all specific `/:id/...` routes)
+router.get('/:id', authenticateJWT, quizController.getQuizById);
 router.put('/:id', authenticateJWT, isAdmin, quizController.updateQuiz);
 router.delete('/:id', authenticateJWT, isAdmin, quizController.deleteQuiz);
 
-// Quiz attempts
-router.get('/attempts/:id', authenticateJWT, quizController.getQuizAttemptById);
-router.post('/:id/submit', authenticateJWT, quizController.submitQuizAttempt);
-
-router.get('/:id/statistics',authenticateJWT, quizController.getQuizStatistics);
-router.get('/:id/attempts', authenticateJWT, quizController.getRecentAttemptsByQuizId);module.exports = router;
+module.exports = router;
