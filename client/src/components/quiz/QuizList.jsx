@@ -15,7 +15,7 @@ const QuizList = () => {
   });
   
   const categories = ['Programming', 'Science', 'Mathematics', 'History', 'Geography', 'General Knowledge'];
-  const difficulties = ['easy', 'medium', 'hard'];
+  const difficulties = ['Easy', 'Medium', 'Hard'];
   
   const fetchQuizzes = async () => {
     setLoading(true);

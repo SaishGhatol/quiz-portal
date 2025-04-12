@@ -26,10 +26,31 @@ const ManageQuestions = () => {
   const fetchQuizWithQuestions = async () => {
     try {
       setLoading(true);
-      // Try with admin prefix path
-      const response = await api.get(`/quizzes/${id}/questions`);
-      setQuiz(response.data.quiz);
-      setQuestions(response.data.questions || []);
+      
+      // Fetch quiz details (if you have a separate endpoint for this)
+      const quizResponse = await api.get(`/quizzes/${id}`);
+      const quiz = quizResponse.data;
+      
+      // Fetch quiz questions with correct answer information
+      const questionsResponse = await api.get(`/quizzes/${id}/questions?withAnswers=true`);
+      const questions = questionsResponse.data.questions;
+      
+      // Transform questions to match component's expected format if necessary
+      const formattedQuestions = questions.map(q => ({
+        _id: q._id,
+        text: q.text,
+        // Transform options based on your backend structure
+        // If your backend uses { text: string, isCorrect: boolean } format:
+        options: q.options.map(opt => opt.text || opt),
+        correctOption: q.options.findIndex(opt => opt.isCorrect) !== -1 ? 
+                       q.options.findIndex(opt => opt.isCorrect) : 
+                       q.correctOption,
+        points: q.points || 1,
+        explanation: q.explanation
+      }));
+      
+      setQuiz(quiz);
+      setQuestions(formattedQuestions);
       setError(null);
     } catch (error) {
       console.error('Error fetching quiz data:', error);
@@ -38,16 +59,12 @@ const ManageQuestions = () => {
       let errorMessage = 'Failed to load quiz data. Please try again.';
       
       if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
         console.error(`Server responded with status ${error.response.status}`);
         errorMessage = `Server error (${error.response.status}): ${error.response.data?.message || 'Failed to load quiz data'}`;
       } else if (error.request) {
-        // The request was made but no response was received
         console.error("No response received from server");
         errorMessage = 'No response from server. Please check your connection.';
       } else {
-        // Something happened in setting up the request
         console.error("Error setting up request:", error.message);
         errorMessage = `Request error: ${error.message}`;
       }
@@ -57,7 +74,106 @@ const ManageQuestions = () => {
       setLoading(false);
     }
   };
-
+  
+  // Updated handleSubmit function
+// Updated handleSubmit function with better error handling and debugging
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  // Validate form
+  if (!currentQuestion.text.trim()) {
+    toast.error('Question text is required');
+    return;
+  }
+  
+  if (currentQuestion.options.some(option => !option.trim())) {
+    toast.error('All options must be filled out');
+    return;
+  }
+  
+  // Transform the question to match your backend's expected format
+  const questionData = {
+    text: currentQuestion.text,
+    // Transform to match backend expectations
+    options: currentQuestion.options.map((option, index) => ({
+      text: option,
+      isCorrect: index === currentQuestion.correctOption
+    })),
+    points: currentQuestion.points || 1,
+    type: 'multiple', // Adjust if you have different question types
+    quizId: id // Explicitly include the quiz ID
+  };
+  
+  console.log('Submitting question data:', questionData);
+  
+  try {
+    if (editing && editIndex >= 0 && editIndex < questions.length) {
+      // Update existing question
+      const questionId = questions[editIndex]?._id;
+      if (!questionId) {
+        toast.error('Question ID is missing. Cannot update.');
+        return;
+      }
+      
+      console.log(`Updating question ${questionId} for quiz ${id}`);
+      const response = await api.put(`/quizzes/${id}/questions/${questionId}`, questionData);
+      console.log('Update response:', response.data);
+      
+      const updatedQuestions = [...questions];
+      updatedQuestions[editIndex] = { 
+        ...currentQuestion, 
+        _id: questionId 
+      };
+      setQuestions(updatedQuestions);
+      toast.success('Question updated successfully');
+    } else {
+      // Add new question
+      console.log(`Adding new question to quiz ${id}`);
+      // Try alternative endpoint format if your API is structured differently
+      const response = await api.post(`/quizzes/${id}/questions`, questionData);
+      console.log('Create response:', response.data);
+      
+      // Assuming the response contains the created question with _id
+      const newQuestion = {
+        _id: response.data.question?._id || response.data._id,
+        text: currentQuestion.text,
+        options: [...currentQuestion.options],
+        correctOption: currentQuestion.correctOption,
+        points: currentQuestion.points
+      };
+      setQuestions([...questions, newQuestion]);
+      toast.success('Question added successfully');
+    }
+    resetForm();
+  } catch (error) {
+    console.error('Error saving question:', error);
+    
+    // Enhanced error handling with more details
+    if (error.response) {
+      console.error('Response error details:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+      
+      const errorDetail = error.response.data?.message || error.response.data?.error || error.response.statusText;
+      toast.error(`Failed to save: ${errorDetail || 'Server error'}`);
+      
+      // Provide more specific guidance based on common error codes
+      if (error.response.status === 404) {
+        toast.error('API endpoint not found. Check quiz ID and API routes.');
+      } else if (error.response.status === 401 || error.response.status === 403) {
+        toast.error('Authentication error. You may need to log in again.');
+      } else if (error.response.status === 400) {
+        toast.error('Invalid question format. Check required fields.');
+      }
+    } else if (error.request) {
+      toast.error('Network issue. Please check your connection.');
+    } else {
+      toast.error(`Error: ${error.message}`);
+    }
+  }
+};
   const handleQuestionChange = (e) => {
     setCurrentQuestion({
       ...currentQuestion,
@@ -110,55 +226,6 @@ const ManageQuestions = () => {
       });
       setEditing(true);
       setEditIndex(index);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Validate form
-    if (!currentQuestion.text.trim()) {
-      toast.error('Question text is required');
-      return;
-    }
-    
-    if (currentQuestion.options.some(option => !option.trim())) {
-      toast.error('All options must be filled out');
-      return;
-    }
-    
-    try {
-      if (editing && editIndex >= 0 && editIndex < questions.length) {
-        // Update existing question
-        const questionId = questions[editIndex]?._id;
-        if (!questionId) {
-          toast.error('Question ID is missing. Cannot update.');
-          return;
-        }
-        
-        await api.put(`/quizzes/${id}/questions/${questionId}`, currentQuestion);
-        const updatedQuestions = [...questions];
-        updatedQuestions[editIndex] = { ...currentQuestion, _id: questionId };
-        setQuestions(updatedQuestions);
-        toast.success('Question updated successfully');
-      } else {
-        // Add new question
-        const response = await api.post(`/quizzes/${id}/questions`, currentQuestion);
-        setQuestions([...questions, response.data.question]);
-        toast.success('Question added successfully');
-      }
-      resetForm();
-    } catch (error) {
-      console.error('Error saving question:', error);
-      
-      // Enhanced error handling
-      if (error.response) {
-        toast.error(`Failed to save: ${error.response?.data?.message || error.response.statusText || 'Server error'}`);
-      } else if (error.request) {
-        toast.error('Network issue. Please check your connection.');
-      } else {
-        toast.error(`Error: ${error.message}`);
-      }
     }
   };
 

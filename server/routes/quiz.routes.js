@@ -19,6 +19,6 @@ router.delete('/:id', authenticateJWT, isAdmin, quizController.deleteQuiz);
 // Quiz attempts
 router.get('/attempts/:id', authenticateJWT, quizController.getQuizAttemptById);
 router.post('/:id/submit', authenticateJWT, quizController.submitQuizAttempt);
-router.get('/my-attempts', authenticateJWT, quizController.getUserAttempts);
 
-module.exports = router;
+router.get('/:id/statistics',authenticateJWT, quizController.getQuizStatistics);
+router.get('/:id/attempts', authenticateJWT, quizController.getRecentAttemptsByQuizId);module.exports = router;

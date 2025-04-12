@@ -213,30 +213,25 @@ exports.getUserAttempts = async (req, res) => {
 
 
 // Get attempt details
-exports.getAttemptDetails = async (req, res) => {
+exports.getAllAttempts = async (req, res) => {
   try {
-    const { quizId } = req.params;
-
-
-    const attempt = await Attempt.findById(quizId)
-      .populate('quizId', 'title category difficulty timeLimit passScore')
-      .populate('answers.questionId');
+    const attempts = await Attempt.find()
+      .populate({
+        path: 'user',  // Keep using 'user' even though schema has 'userId'
+        select: 'name email',
+        strictPopulate: false  // This tells Mongoose to ignore schema mismatch
+      })
+      .populate('quizId', 'title')
+      .sort({ createdAt: -1 })
+      .lean();
     
-    if (!attempt) {
-      return res.status(404).json({ message: 'Attempt not found' });
-    }
-    
-    // Check if user is authorized to view this attempt
-    if (attempt.userId.toString() !== req.userId && req.userRole !== 'admin') {
-      return res.status(403).json({ message: 'Not authorized to view this attempt' });
-    }
-    
-    res.json({ attempt });
+    res.status(200).json({ attempts });
   } catch (error) {
-    console.error('Get attempt details error:', error);
-    res.status(500).json({ message: 'Server error while fetching attempt details' });
+    console.error('Error getting all attempts:', error);
+    res.status(500).json({ message: 'Failed to fetch attempts', error: error.message });
   }
 };
+
 
 // Get quiz statistics
 exports.getQuizStats = async (req, res) => {
@@ -315,5 +310,36 @@ exports.getQuizStats = async (req, res) => {
   } catch (error) {
     console.error('Get quiz stats error:', error);
     res.status(500).json({ message: 'Server error while fetching quiz statistics' });
+  }
+};
+
+exports.getAttemptDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const attempt = await Attempt.findById(id)
+      .populate('quizId', 'title category difficulty')
+      .populate({
+        path: 'userId',
+        select: 'name email',
+        strictPopulate: false,
+      });
+
+    if (!attempt) {
+      return res.status(404).json({ message: 'Attempt not found' });
+    }
+
+    // Check if user is allowed to view this attempt
+    if (
+      req.userRole !== 'admin' &&
+      attempt.userId._id.toString() !== req.userId
+    ) {
+      return res.status(403).json({ message: 'Not authorized to view this attempt' });
+    }
+
+    res.json({ attempt });
+  } catch (error) {
+    console.error('Get attempt details error:', error);
+    res.status(500).json({ message: 'Server error fetching attempt details' });
   }
 };

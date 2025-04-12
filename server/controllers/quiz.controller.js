@@ -258,3 +258,121 @@ exports.getUserAttempts = async (req, res) => {
     res.status(500).json({ message: 'Server error fetching attempts' });
   }
 };
+
+const getQuizStatistics = async (req, res) => {
+  try {
+    const quizId = req.params.id;
+
+    // ✅ Correct field: 'quiz', not 'quizId'
+    const attempts = await Attempt.find({ quiz: quizId });
+
+    if (!attempts.length) {
+      return res.json({
+        statistics: {
+          totalAttempts: 0,
+          averageScore: 0,
+          passRate: 0,
+          uniqueUsers: 0,
+          questionStats: [],
+        },
+      });
+    }
+
+    const totalAttempts = attempts.length;
+    const averageScore =
+      attempts.reduce((sum, a) => sum + (a.score / a.maxScore) * 100, 0) / totalAttempts;
+
+    const passRate =
+      (attempts.filter((a) => (a.score / a.maxScore) * 100 >= 40).length / totalAttempts) * 100;
+
+    const uniqueUsers = new Set(attempts.map((a) => a.userId.toString())).size;
+
+    const quiz = await mongoose.model("Quiz").findById(quizId);
+
+    const questionStats = quiz.questions.map((q) => {
+      const stats = {
+        text: q.text,
+        correctCount: 0,
+        totalAttempts: 0,
+        successRate: 0,
+      };
+
+      attempts.forEach((attempt) => {
+        const answer = attempt.answers.find(
+          (ans) => ans.questionId.toString() === q._id.toString()
+        );
+        if (answer) {
+          stats.totalAttempts++;
+          if (answer.isCorrect) stats.correctCount++;
+        }
+      });
+
+      stats.successRate =
+        stats.totalAttempts > 0
+          ? (stats.correctCount / stats.totalAttempts) * 100
+          : 0;
+
+      return stats;
+    });
+
+    res.json({
+      statistics: {
+        totalAttempts,
+        averageScore,
+        passRate,
+        uniqueUsers,
+        questionStats,
+      },
+    });
+  } catch (err) {
+    console.error("Error calculating statistics:", err);
+    res.status(500).json({ message: "Error calculating statistics", error: err.message });
+  }
+};
+
+const getRecentAttemptsByQuizId = async (req, res) => {
+  try {
+    const quizId = req.params.id;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const attempts = await Attempt.find({ quizId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('userId', 'name email');
+
+    const formattedAttempts = attempts.map(attempt => {
+      const percentageScore = (attempt.score / attempt.maxScore) * 100;
+
+      const timeTaken =
+        attempt.completedAt && attempt.startedAt
+          ? Math.floor((new Date(attempt.completedAt) - new Date(attempt.startedAt)) / 1000)
+          : null;
+
+      return {
+        _id: attempt._id,
+        score: Math.round(percentageScore),
+        timeTaken,
+        createdAt: attempt.createdAt,
+        user: attempt.userId
+          ? { name: attempt.userId.name, email: attempt.userId.email }
+          : null,
+      };
+    });
+
+    res.json({ attempts: formattedAttempts });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching attempts', error: err.message });
+  }
+};
+module.exports = {
+  createQuiz,
+  getAllQuizzes,
+  getQuizById,
+  updateQuiz,
+  deleteQuiz,
+  submitQuizAttempt,
+  getQuizAttemptById,
+  getUserAttempts,
+  getQuizStatistics,
+  getRecentAttemptsByQuizId,
+};

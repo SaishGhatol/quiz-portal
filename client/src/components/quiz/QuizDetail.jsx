@@ -161,7 +161,7 @@ const QuizDetail = () => {
             
             <div className="bg-gray-50 p-4 rounded-md">
               <div className="text-sm text-gray-500">Number of Questions</div>
-              <div className="font-medium">{quiz.totalQuestions || quiz.questions?.length || 0}</div>
+              <div className="font-medium">{quiz.totalQuestions}</div>
             </div>
             
             <div className="bg-gray-50 p-4 rounded-md">

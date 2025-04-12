@@ -5,46 +5,27 @@ const mongoose = require('mongoose');
 // Create a new question for a quiz
 exports.createQuestion = async (req, res) => {
   try {
-    const { quizId, text, options, type, points, explanation } = req.body;
-    
-    // Validate quiz exists
-    const quiz = await Quiz.findById(quizId);
-    if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
+    const { text, options, points, type, quizId } = req.body;
+
+    if (!text || !options || !Array.isArray(options) || !quizId) {
+      return res.status(400).json({ message: 'Missing required fields' });
     }
-    
-    // Check authorization (admin or quiz creator)
-    if (req.userRole !== 'admin' && quiz.createdBy.toString() !== req.userId) {
-      return res.status(403).json({ message: 'Not authorized to add questions to this quiz' });
-    }
-    
-    // Create question
+
     const question = new Question({
-      quizId,
       text,
       options,
+      points,
       type,
-      points: points || 1,
-      explanation
+      quizId
     });
-    
+
     const savedQuestion = await question.save();
-    
-    // Update quiz's totalQuestions count
-    await Quiz.findByIdAndUpdate(quizId, { 
-      $inc: { totalQuestions: 1 } 
-    });
-    
-    res.status(201).json({
-      message: 'Question created successfully',
-      question: savedQuestion
-    });
+    res.status(201).json(savedQuestion);
   } catch (error) {
-    console.error('Create question error:', error);
+    console.error('Error in createQuestion:', error);
     res.status(500).json({ message: 'Server error during question creation' });
   }
 };
-
 // Get all questions for a quiz
 exports.getQuestionsByQuiz = async (req, res) => {
   try {
@@ -191,5 +172,59 @@ exports.bulkCreateQuestions = async (req, res) => {
     res.status(500).json({ message: 'Server error during bulk question creation' });
   } finally {
     session.endSession();
+  }
+};
+
+exports.reorderQuestion = async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { direction } = req.body;
+    
+    if (!['up', 'down'].includes(direction)) {
+      return res.status(400).json({ message: 'Invalid direction. Use "up" or "down"' });
+    }
+    
+    // Find the question to reorder
+    const question = await Question.findById(questionId);
+    
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+    
+    // Verify authorization
+    const quiz = await Quiz.findById(question.quizId);
+    if (req.userRole !== 'admin' && quiz.createdBy.toString() !== req.userId) {
+      return res.status(403).json({ message: 'Not authorized to reorder this question' });
+    }
+    
+    // Find questions to swap based on creation time
+    let compareOperator = direction === 'up' ? '$lt' : '$gt';
+    let sortDirection = direction === 'up' ? -1 : 1;
+    
+    // Find the adjacent question to swap with
+    const adjacentQuestion = await Question.findOne({
+      quizId: question.quizId,
+      createdAt: { [compareOperator]: question.createdAt }
+    }).sort({ createdAt: sortDirection });
+    
+    if (!adjacentQuestion) {
+      return res.status(400).json({ 
+        message: `Question cannot be moved ${direction}. It's already at the ${direction === 'up' ? 'top' : 'bottom'}.`
+      });
+    }
+    
+    // Swap creation timestamps (or add a specific 'order' field if you prefer)
+    const tempCreatedAt = question.createdAt;
+    question.createdAt = adjacentQuestion.createdAt;
+    adjacentQuestion.createdAt = tempCreatedAt;
+    
+    // Save both questions
+    await question.save();
+    await adjacentQuestion.save();
+    
+    res.json({ message: 'Question reordered successfully' });
+  } catch (error) {
+    console.error('Reorder question error:', error);
+    res.status(500).json({ message: 'Server error during question reordering' });
   }
 };

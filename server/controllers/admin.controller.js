@@ -16,7 +16,7 @@ exports.getDashboardStats = async (req, res, next) => {
       User.countDocuments(),
       Attempt.countDocuments(),
       // Active users defined as users who logged in within the last 30 days
-      User.countDocuments({ 
+      User.countDocuments({
         lastLoginAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
       })
     ]);
@@ -38,7 +38,7 @@ exports.getDashboardStats = async (req, res, next) => {
 exports.getAllQuizzes = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, search = '', sortBy = 'createdAt', order = 'desc' } = req.query;
-    
+
     // Create query object
     const query = {};
     if (search) {
@@ -47,11 +47,11 @@ exports.getAllQuizzes = async (req, res, next) => {
         { description: { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     // Set sort order
     const sort = {};
     sort[sortBy] = order === 'asc' ? 1 : -1;
-    
+
     // Execute query with pagination
     const quizzes = await Quiz.find(query)
       .populate('author', 'name email')
@@ -59,10 +59,10 @@ exports.getAllQuizzes = async (req, res, next) => {
       .limit(parseInt(limit))
       .skip((page - 1) * limit)
       .exec();
-    
+
     // Get total count for pagination
     const total = await Quiz.countDocuments(query);
-    
+
     res.status(200).json({
       quizzes,
       totalPages: Math.ceil(total / limit),
@@ -74,31 +74,6 @@ exports.getAllQuizzes = async (req, res, next) => {
   }
 };
 
-/**
- * Get a specific quiz by ID
- */
-exports.getQuizById = async (req, res, next) => {
-  try {
-    const quiz = await Quiz.findById(req.params.id)
-      .populate('author', 'name email')
-      .populate('questions')
-      .exec();
-    
-    if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
-    }
-    
-    // Get number of attempts for this quiz
-    const attemptCount = await Attempt.countDocuments({ quiz: req.params.id });
-    
-    res.status(200).json({
-      quiz,
-      attemptCount
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 /**
  * Get all users with pagination
@@ -106,7 +81,7 @@ exports.getQuizById = async (req, res, next) => {
 exports.getAllUsers = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, search = '', sortBy = 'createdAt', order = 'desc' } = req.query;
-    
+
     // Create query object
     const query = {};
     if (search) {
@@ -115,11 +90,11 @@ exports.getAllUsers = async (req, res, next) => {
         { email: { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     // Set sort order
     const sort = {};
     sort[sortBy] = order === 'asc' ? 1 : -1;
-    
+
     // Execute query with pagination
     const users = await User.find(query)
       .select('-password')
@@ -127,10 +102,10 @@ exports.getAllUsers = async (req, res, next) => {
       .limit(parseInt(limit))
       .skip((page - 1) * limit)
       .exec();
-    
+
     // Get total count for pagination
     const total = await User.countDocuments(query);
-    
+
     // For each user, get their quiz attempt count
     const enhancedUsers = await Promise.all(users.map(async (user) => {
       const attemptCount = await Attempt.countDocuments({ user: user._id });
@@ -139,7 +114,7 @@ exports.getAllUsers = async (req, res, next) => {
         attemptCount
       };
     }));
-    
+
     res.status(200).json({
       users: enhancedUsers,
       totalPages: Math.ceil(total / limit),
@@ -157,17 +132,17 @@ exports.getAllUsers = async (req, res, next) => {
 exports.getUserById = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     // Get user's attempts
     const attempts = await Attempt.find({ user: req.params.id })
       .populate('quiz', 'title')
       .sort({ completedAt: -1 })
       .limit(10);
-    
+
     res.status(200).json({
       user,
       attempts
@@ -183,20 +158,20 @@ exports.getUserById = async (req, res, next) => {
 exports.updateUser = async (req, res, next) => {
   try {
     const { name, email, role, isActive } = req.body;
-    
+
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     // Update fields
     if (name) user.name = name;
     if (email) user.email = email;
     if (role) user.role = role;
     if (isActive !== undefined) user.isActive = isActive;
-    
+
     await user.save();
-    
+
     res.status(200).json({
       message: 'User updated successfully',
       user: {
@@ -220,11 +195,11 @@ exports.updateUser = async (req, res, next) => {
 exports.deleteUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
+
     // For safety, prevent deleting the last admin
     if (user.role === 'admin') {
       const adminCount = await User.countDocuments({ role: 'admin' });
@@ -232,12 +207,12 @@ exports.deleteUser = async (req, res, next) => {
         return res.status(400).json({ message: 'Cannot delete the last admin user' });
       }
     }
-    
+
     await User.deleteOne({ _id: req.params.id });
-    
+
     // Optional: Delete user's attempts or keep them for historical data
     // await Attempt.deleteMany({ user: req.params.id });
-    
+
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
     next(error);
@@ -250,46 +225,46 @@ exports.deleteUser = async (req, res, next) => {
 exports.getAllAttempts = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, search = '', sortBy = 'completedAt', order = 'desc' } = req.query;
-    
+
     // Create query object
     const query = {};
     if (search) {
       // If searching, we need to find users and quizzes matching the search term first
       const users = await User.find({ name: { $regex: search, $options: 'i' } });
       const quizzes = await Quiz.find({ title: { $regex: search, $options: 'i' } });
-      
+
       const userIds = users.map(user => user._id);
       const quizIds = quizzes.map(quiz => quiz._id);
-      
+
       if (userIds.length > 0 || quizIds.length > 0) {
         query.$or = [];
-        
+
         if (userIds.length > 0) {
           query.$or.push({ user: { $in: userIds } });
         }
-        
+
         if (quizIds.length > 0) {
           query.$or.push({ quiz: { $in: quizIds } });
         }
       }
     }
-    
+
     // Set sort order
     const sort = {};
     sort[sortBy] = order === 'asc' ? 1 : -1;
-    
+
     // Execute query with pagination
     const attempts = await Attempt.find(query)
-      .populate('user', 'name email')
-      .populate('quiz', 'title')
+      .populate('user', 'name email') // FIXED
+      .populate('quiz', 'title')      // FIXED
       .sort(sort)
       .limit(parseInt(limit))
       .skip((page - 1) * limit)
       .exec();
-    
+
     // Get total count for pagination
     const total = await Attempt.countDocuments(query);
-    
+
     res.status(200).json({
       attempts,
       totalPages: Math.ceil(total / limit),
@@ -311,118 +286,184 @@ exports.getAttemptById = async (req, res, next) => {
       .populate('quiz', 'title description')
       .populate('answers.question')
       .exec();
-    
+
     if (!attempt) {
       return res.status(404).json({ message: 'Attempt not found' });
     }
-    
+
     res.status(200).json({ attempt });
   } catch (error) {
     next(error);
   }
 };
-exports.getQuizStatistics = async (req, res) => {
-    try {
-      const quizId = req.params.id;
-      const attempts = await Attempt.find({ quizId });
-  
-      if (!attempts.length) {
-        return res.json({
-          statistics: {
-            totalAttempts: 0,
-            averageScore: 0,
-            passRate: 0,
-            uniqueUsers: 0,
-            questionStats: [],
-          },
-        });
-      }
-  
-      const totalAttempts = attempts.length;
-      const averageScore = attempts.reduce((sum, a) => sum + (a.score / a.maxScore) * 100, 0) / totalAttempts;
-      const passRate = (attempts.filter(a => (a.score / a.maxScore) * 100 >= 40).length / totalAttempts) * 100;
-      const uniqueUsers = new Set(attempts.map(a => a.userId.toString())).size;
-  
-      const quiz = await mongoose.model('Quiz').findById(quizId);
-      const questionStats = quiz.questions.map(q => {
-        const stats = {
-          text: q.text,
-          correctCount: 0,
-          totalAttempts: 0,
-          successRate: 0,
-        };
-  
-        attempts.forEach(attempt => {
-          const answer = attempt.answers.find(ans => ans.questionId.toString() === q._id.toString());
-          if (answer) {
-            stats.totalAttempts++;
-            if (answer.isCorrect) stats.correctCount++;
-          }
-        });
-  
-        stats.successRate = stats.totalAttempts > 0
-          ? (stats.correctCount / stats.totalAttempts) * 100
-          : 0;
-  
-        return stats;
-      });
-  
-      res.json({
-        statistics: {
-          totalAttempts,
-          averageScore,
-          passRate,
-          uniqueUsers,
-          questionStats,
-        },
-      });
-  
-    } catch (err) {
-      res.status(500).json({ message: 'Error calculating statistics', error: err.message });
-    }
-  };
-  exports.getRecentAttempts = async (req, res) => {
-    try {
-      const quizId = req.params.id;
-      const limit = parseInt(req.query.limit) || 10;
-  
-      const attempts = await Attempt.find({ quizId })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .populate('userId', 'name email');
-  
-      const formattedAttempts = attempts.map(attempt => {
-        const percentageScore = (attempt.score / attempt.maxScore) * 100;
-  
-        const timeTaken =
-          attempt.completedAt && attempt.startedAt
-            ? Math.floor((new Date(attempt.completedAt) - new Date(attempt.startedAt)) / 1000)
-            : null;
-  
-        return {
-          _id: attempt._id,
-          score: Math.round(percentageScore),
-          timeTaken,
-          createdAt: attempt.createdAt,
-          user: attempt.userId
-            ? { name: attempt.userId.name, email: attempt.userId.email }
-            : null,
-        };
-      });
-  
-      res.json({ attempts: formattedAttempts });
-    } catch (err) {
-      res.status(500).json({ message: 'Error fetching attempts', error: err.message });
-    }
-  };
-  
-  exports.getAllQuestions = async (req, res) => {
-    try {
-      const questions = await Question.find();
-      res.status(200).json(questions);
-    } catch (error) {
-      res.status(500).json({ message: 'Error fetching questions', error: error.message });
-    }
-  };
 
-  
+exports.getQuizById = async (req, res, next) => {
+  try {
+    // Handle special case for "recent"
+    if (req.params.id === "recent") {
+      const recentQuizzes = await Quiz.find()
+        .sort({ createdAt: -1 })
+        .limit(1);
+      
+      if (recentQuizzes.length === 0) {
+        return res.status(404).json({ message: 'No quizzes found' });
+      }
+      
+      return res.status(200).json({ quiz: recentQuizzes[0] });
+    }
+    
+    // Regular case - find by ID
+    const quiz = await Quiz.findById(req.params.id);
+    
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+    
+    res.status(200).json({ quiz });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+exports.getRecentAttempts = async (req, res) => {
+  try {
+    const quizId = req.params.id;
+    const limit = parseInt(req.query.limit) || 10;
+
+    // For the getRecentAttempts controller
+    const attempts = await Attempt.find({ quiz: quizId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate({
+        path: 'userId',  
+        select: 'name email',
+        model: 'User',
+        strictPopulate: false
+      });
+
+
+
+    const formattedAttempts = attempts.map(attempt => {
+      const percentageScore = (attempt.score / attempt.maxScore) * 100;
+
+      const timeTaken =
+        attempt.completedAt && attempt.startedAt
+          ? Math.floor((new Date(attempt.completedAt) - new Date(attempt.startedAt)) / 1000)
+          : null;
+
+      return {
+        __id: attempt._id,
+        score: Math.round(percentageScore),
+        timeTaken,
+        createdAt: attempt.createdAt,
+        user: attempt.user
+          ? { name: attempt.user.name, email: attempt.user.email }
+          : null,
+      };
+    });
+
+    res.json({ attempts: formattedAttempts });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching attempts', error: err.message });
+  }
+};
+exports.getAllQuestions = async (req, res) => {
+  try {
+    const questions = await Question.find();
+    res.status(200).json(questions);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching questions', error: error.message });
+  }
+};
+
+// Define the getQuizQuestions method
+exports.getQuizQuestions = async (req, res, next) => {
+  try {
+    const quizId = req.params.id;
+    const questions = await Question.find({ quizId });
+    res.status(200).json(questions);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Define the addQuestion method
+exports.addQuestion = async (req, res, next) => {
+  try {
+    const quizId = req.params.id;
+    const { text, options, correctOption } = req.body;
+    const question = new Question({ quizId, text, options, correctOption });
+    await question.save();
+    res.status(201).json(question);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Define the updateQuestion method
+exports.updateQuestion = async (req, res, next) => {
+  try {
+    const quizId = req.params.id;
+    const questionId = req.params.questionId;
+    const { text, options, correctOption } = req.body;
+    const question = await Question.findById(questionId);
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+    question.text = text;
+    question.options = options;
+    question.correctOption = correctOption;
+    await question.save();
+    res.status(200).json(question);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.reorderQuestion = async (req, res, next) => {
+  try {
+    const { id: quizId, questionId } = req.params;
+    const { newPosition } = req.body;
+
+    // Find the quiz
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz not found' });
+    }
+
+    // Find the question
+    const question = await Question.findById(questionId);
+    if (!question) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    // Update the question's position
+    // This implementation depends on how you're storing question order
+    // Assuming you might have an 'order' field in your Question model
+    question.order = newPosition;
+    await question.save();
+
+    res.status(200).json({
+      message: 'Question reordered successfully',
+      question
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getRecentQuizzes = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+
+    const quizzes = await Quiz.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('createdBy', 'name');
+
+    res.status(200).json({ quizzes });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch recent quizzes', error: error.message });
+  }
+};

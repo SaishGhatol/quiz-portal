@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 
+
+
+
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
     totalQuizzes: 0,
@@ -13,60 +16,108 @@ const AdminDashboard = () => {
   const [recentQuizzes, setRecentQuizzes] = useState([]);
   const [recentAttempts, setRecentAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({
+    stats: null,
+    quizzes: null,
+    attempts: null
+  });
   
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       
-      try {
-        // Handle stats individually with error handling
+      // Reset errors
+      setErrors({
+        stats: null,
+        quizzes: null,
+        attempts: null
+      });
+      
+      // Create individual fetch functions with retry capability
+      const fetchStats = async (retryCount = 0) => {
         try {
-          const statsResponse = await api.get('/admin/dashboard/stats'); // Fixed endpoint path
-          setStats(statsResponse.data);
-        } catch (statsError) {
-          console.error('Error fetching dashboard stats:', statsError);
-          // Keep default stats values if fetch fails
+          const response = await api.get('/admin/dashboard/stats');
+          return response.data;
+        } catch (error) {
+          if (retryCount < 2 && (error.response?.status === 500 || !error.response)) {
+            console.log(`Retrying stats fetch (${retryCount + 1}/2)...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return fetchStats(retryCount + 1);
+          }
+          
+          const errorMessage = error.response?.data?.message || 'Unable to fetch statistics';
+          setErrors(prev => ({ ...prev, stats: errorMessage }));
+          return null;
         }
-        
-        // Handle quizzes fetch with separate error handling
+      };
+      
+      const fetchQuizzes = async (retryCount = 0) => {
         try {
-          const quizzesResponse = await api.get('/admin/quizzes?limit=5'); // Fixed endpoint path
-          setRecentQuizzes(quizzesResponse.data.quizzes);
-        } catch (quizzesError) {
-          console.error('Error fetching recent quizzes:', quizzesError);
-          setRecentQuizzes([]);
+          const response = await api.get('/admin/quizzes/recent?limit=5');
+          return response.data.quizzes;
+        } catch (error) {
+          if (retryCount < 2 && (error.response?.status === 500 || !error.response)) {
+            console.log(`Retrying quizzes fetch (${retryCount + 1}/2)...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return fetchQuizzes(retryCount + 1);
+          }
+          
+          const errorMessage = error.response?.data?.message || 'Unable to fetch recent quizzes';
+          setErrors(prev => ({ ...prev, quizzes: errorMessage }));
+          return [];
         }
-        
-        // Handle attempts fetch with separate error handling
+      };
+      
+      const fetchAttempts = async (retryCount = 0) => {
         try {
-          const attemptsResponse = await api.get('/admin/attempts?limit=5'); // Fixed endpoint path
-          setRecentAttempts(attemptsResponse.data.attempts);
-        } catch (attemptsError) {
-          console.error('Error fetching recent attempts:', attemptsError);
-          setRecentAttempts([]);
+          const response = await api.get('/admin/attempts?limit=5');
+          return response.data.attempts;
+        } catch (error) {
+          if (retryCount < 2 && (error.response?.status === 500 || !error.response)) {
+            console.log(`Retrying attempts fetch (${retryCount + 1}/2)...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return fetchAttempts(retryCount + 1);
+          }
+          
+          const errorMessage = error.response?.data?.message || 'Unable to fetch recent attempts';
+          setErrors(prev => ({ ...prev, attempts: errorMessage }));
+          return [];
         }
-        
-        setError(null);
-      } catch (error) {
-        console.error('Error in fetchDashboardData:', error);
-        setError('Failed to load dashboard data. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
+      };
+      
+      // Execute all fetches in parallel for better performance
+      const results = await Promise.all([
+        fetchStats(),
+        fetchQuizzes(),
+        fetchAttempts()
+      ]);
+      
+      // Set states based on results
+      if (results[0]) setStats(results[0]);
+      if (results[1]) setRecentQuizzes(results[1]);
+      if (results[2]) setRecentAttempts(results[2]);
+      
+      setLoading(false);
     };
     
     fetchDashboardData();
   }, []);
   
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Unknown date';
+    
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return 'Invalid date';
+    }
   };
 
   if (loading) {
@@ -77,10 +128,21 @@ const AdminDashboard = () => {
     );
   }
   
-  if (error) {
+  // Check if we have critical errors that prevent rendering the dashboard
+  const hasCriticalErrors = errors.stats && errors.quizzes && errors.attempts;
+  
+  if (hasCriticalErrors) {
     return (
       <div className="text-center py-10">
-        <p className="text-red-500">{error}</p>
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+          <p className="text-red-700">Failed to load dashboard data. Please try again later.</p>
+        </div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Refresh Page
+        </button>
       </div>
     );
   }
@@ -91,6 +153,12 @@ const AdminDashboard = () => {
       
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {errors.stats && (
+          <div className="md:col-span-4 bg-red-50 border-l-4 border-red-500 p-4">
+            <p className="text-red-700">{errors.stats}</p>
+          </div>
+        )}
+        
         {/* Total Quizzes Card */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex items-center">
@@ -157,7 +225,11 @@ const AdminDashboard = () => {
         {/* Recent Quizzes */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">Recent Quizzes</h2>
-          {recentQuizzes.length > 0 ? (
+          {errors.quizzes ? (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4">
+              <p className="text-red-700">{errors.quizzes}</p>
+            </div>
+          ) : recentQuizzes.length > 0 ? (
             <div className="space-y-4">
               {recentQuizzes.map(quiz => (
                 <div key={quiz._id} className="border-b pb-4 last:border-b-0">
@@ -165,7 +237,7 @@ const AdminDashboard = () => {
                     <div>
                       <h3 className="font-medium">{quiz.title}</h3>
                       <p className="text-sm text-gray-500">
-                        Created by {quiz.author?.name || 'Unknown'} • {formatDate(quiz.createdAt)}
+                        Created by {quiz.createdBy?.name || 'Unknown'} • {formatDate(quiz.createdAt)}
                       </p>
                     </div>
                     <Link 
@@ -194,7 +266,11 @@ const AdminDashboard = () => {
         {/* Recent Attempts */}
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold mb-4">Recent Attempts</h2>
-          {recentAttempts.length > 0 ? (
+          {errors.attempts ? (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4">
+              <p className="text-red-700">{errors.attempts}</p>
+            </div>
+          ) : recentAttempts.length > 0 ? (
             <div className="space-y-4">
               {recentAttempts.map(attempt => (
                 <div key={attempt._id} className="border-b pb-4 last:border-b-0">
@@ -202,7 +278,7 @@ const AdminDashboard = () => {
                     <div>
                       <h3 className="font-medium">{attempt.user?.name || 'Anonymous'}</h3>
                       <p className="text-sm text-gray-500">
-                        {attempt.quiz?.title} • Score: {attempt.score}% • {formatDate(attempt.completedAt)}
+                        {attempt.quiz?.title || 'Unknown Quiz'} • Score: {attempt.score || 0}% • {formatDate(attempt.completedAt)}
                       </p>
                     </div>
                     <Link

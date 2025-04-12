@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
 const attemptSchema = new mongoose.Schema({
-  userId: {
+  user: {  
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  quizId: {
+  quiz: {  
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Quiz',
     required: true
