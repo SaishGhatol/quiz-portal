@@ -266,18 +266,27 @@ exports.submitQuizAttempt = async (req, res) => {
 
 exports.getQuizAttemptById = async (req, res) => {
   try {
-    const attempt = await Quiz.findById(req.params.id).populate('quiz');
+    // Use Attempt model instead of Quiz model
+    const attempt = await Attempt.findById(req.params.id).populate('quiz user');
+    
+    console.log("attempt", attempt);
 
     if (!attempt) {
       return res.status(404).json({ message: 'Attempt not found' });
     }
-    res.json({ attempt, quiz: attempt.quiz });
+    
+    const quizWithQuestions = {
+      ...attempt.quiz._doc,
+      questions: Question
+    };
+    
+    res.json({ attempt, quiz: quizWithQuestions });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
-
 // Get all attempts for a user
 exports.getUserAttempts = async (req, res) => {
   try {
