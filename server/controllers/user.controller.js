@@ -6,21 +6,21 @@ exports.getDashboard = async (req, res) => {
     const userId = req.userId; // set by auth middleware
 
     // Count total active quizzes
-    const totalQuizzes = await Quiz.countDocuments({ isActive: true });
+    const totalQuizzes = await Quiz.countDocuments();
 
     // Count user attempts
     const totalAttempts = await Attempt.countDocuments({ userId });
 
     // Get recent completed quizzes
     const completedAttempts = await Attempt.find({ userId })
-      .populate('quizId', 'title')
+      .populate('quiz', 'title')
       .sort({ createdAt: -1 })
       .limit(5)
       .lean();
 
     const completedQuizzes = completedAttempts.map(attempt => ({
-      _id: attempt.quizId?._id,
-      title: attempt.quizId?.title,
+      _id: attempt.quiz?._id,
+      title: attempt.quiz?.title,
       score: attempt.score,
       completedAt: attempt.completedAt || attempt.createdAt,
       attemptId: attempt._id

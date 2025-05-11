@@ -27,12 +27,14 @@ const ManageUsers = () => {
         }
       });
       
-      setUsers(response.data.users);
+      // Ensure we always set users to an array, even if response.data.users is undefined
+      setUsers(response.data.users || []);
       setTotalPages(response.data.totalPages || 1);
       setError(null);
     } catch (error) {
       console.error('Error fetching users:', error);
       setError('Failed to load users. Please try again.');
+      setUsers([]); // Ensure users is reset to an empty array on error
     } finally {
       setLoading(false);
     }
@@ -99,7 +101,7 @@ const ManageUsers = () => {
     }
   };
 
-  if (loading && users.length === 0) {
+  if (loading && (!users || users.length === 0)) {
     return <div className="text-center py-10">Loading users...</div>;
   }
 
@@ -136,7 +138,7 @@ const ManageUsers = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.length > 0 ? (
+              {users && users.length > 0 ? (
                 users.map(user => (
                   <tr key={user._id}>
                     <td className="px-6 py-4 whitespace-nowrap">

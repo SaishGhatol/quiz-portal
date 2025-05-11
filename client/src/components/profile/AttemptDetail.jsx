@@ -16,14 +16,26 @@ const AttemptDetail = () => {
     const fetchAttemptDetail = async () => {
       setLoading(true);
       try {
+        // Fixed: Using template literal to insert the actual ID parameter
         const response = await api.get(`/attempts/${id}`);
-        setAttemptData(response.data);
+        console.log(response);
+        
+        // Fixed: Handle the response structure that matches the controller
+        if (response.data.success) {
+          setAttemptData({
+            attempt: response.data.attempt,
+            quiz: response.data.attempt.quiz
+          });
+        } else {
+          throw new Error(response.data.message || 'Failed to load attempt details');
+        }
+        
         setError(null);
         
         // Initialize expanded state for all questions
-        if (response.data?.quiz?.questions) {
+        if (response.data.attempt?.quiz?.questions) {
           const initialExpandedState = {};
-          response.data.quiz.questions.forEach(question => {
+          response.data.attempt.quiz.questions.forEach(question => {
             initialExpandedState[question._id] = false;
           });
           setExpandedExplanations(initialExpandedState);

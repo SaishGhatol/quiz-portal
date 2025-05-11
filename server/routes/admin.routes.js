@@ -11,11 +11,12 @@ router.get('/dashboard/stats', adminController.getDashboardStats);
 
 // Quiz management routes
 router.get('/quizzes', adminController.getAllQuizzes);
-router.post('/', adminController.createQuiz);  
+router.post('/quizzes/create',authenticateJWT, adminController.createQuiz);  
 router.get('/quizzes/recent', adminController.getRecentQuizzes);
-router.get('/quizzes/:id', adminController.getQuizById);
-router.get('/quizzes/:id/attempts', adminController.getRecentAttempts);
 
+router.get('/quizzes/:id', adminController.getQuizById);
+router.get("/quizzes/attempts" , adminController.getAllAttempts)
+router.get('/quizzes/attempts/recent', adminController.getRecentAttempts);
 // User management routes
 router.get('/users', adminController.getAllUsers);
 router.get('/users/:id', adminController.getUserById);

@@ -21,6 +21,7 @@
     "helmet": "^8.1.0",
     "http": "^0.0.1-security",
     "jsonwebtoken": "^9.0.2",
+    "jwt-decode": "^4.0.0",
     "mongoose": "^8.13.2",
     "nodemon": "^3.1.9",
     "socketio": "^1.0.0",

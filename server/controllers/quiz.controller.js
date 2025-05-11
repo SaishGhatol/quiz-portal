@@ -28,34 +28,47 @@ exports.createQuiz = async (req, res) => {
     res.status(500).json({ message: 'Server error creating quiz' });
   }
 };
-
 // Get all quizzes (with filters)
-exports.getAllQuizzes = async (req, res) => {
+exports.getAllQuizzes = async (req, res, next) => {
   try {
-    const { category, difficulty, search } = req.query;
-    let query = { isActive: true };
-    
-    // Apply filters if provided
-    if (category) query.category = category;
-    if (difficulty) query.difficulty = difficulty;
-    if (search) query.title = { $regex: search, $options: 'i' };
-    
-    // For admin users, show all quizzes including inactive ones
-    if (req.userRole === 'admin') {
-      delete query.isActive;
+    const { page = 1, limit = 100, search = '', sortBy = 'createdAt', order = 'desc' } = req.query;
+
+    // Create query object
+    const query = {};
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
     }
-    
+
+    // Set sort order
+    const sort = {};
+    sort[sortBy] = order === 'asc' ? 1 : -1;
+
+    // Execute query with pagination
     const quizzes = await Quiz.find(query)
-      .populate('createdBy', 'name')
-      .sort({ createdAt: -1 });
-    
-    res.json({ quizzes });
+      .populate('createdBy', 'name email') // Fixed populate to specify the field and what to populate
+      .sort(sort)
+      .limit(parseInt(limit))
+      .skip((page - 1) * limit)
+      .exec();
+
+    // Get total count for pagination
+    const total = await Quiz.countDocuments(query);
+
+    // Format response to match what frontend expects
+    res.status(200).json({
+      quizzes,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      total
+    });
   } catch (error) {
-    console.error('Get quizzes error:', error);
-    res.status(500).json({ message: 'Server error fetching quizzes' });
+    console.error('Error fetching quizzes:', error);
+    next(error);
   }
 };
-
 // Get quiz by ID with questions
 exports.getQuizById = async (req, res) => {
   try {

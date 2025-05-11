@@ -441,7 +441,7 @@ const QuizResults = () => {
           
           {quiz?._id && scorePercentage < 80 && (
             <Link 
-              to={`/quiz/take/${quiz._id}`}
+              to={`/quiz/${quiz._id}`}
               className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

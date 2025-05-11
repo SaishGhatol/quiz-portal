@@ -16,7 +16,6 @@ router.get('/:id/questions', authenticateJWT, quizController.getQuizById);
 router.get("/my-attempts" ,authenticateJWT,quizController.getUserAttempts)
 
 
-
 // Quiz details routes (must be after all specific `/:id/...` routes)]]
 router.get('/:id', authenticateJWT, quizController.getQuizById);
 router.put('/:id', authenticateJWT, isAdmin, quizController.updateQuiz);

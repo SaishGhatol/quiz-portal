@@ -19,6 +19,7 @@ const Dashboard = () => {
         setLoading(true);
         // Change this endpoint to match your server's API endpoint for user dashboard
         const response = await api.get('/users/dashboard');
+        console.log(response)
         setStats(response.data);
         setError(null);
       } catch (error) {

@@ -15,7 +15,7 @@ const ManageQuizzes = () => {
   const fetchQuizzes = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/quizzes');
+      const response = await api.get('/admin/quizzes/recent');
       
       // Fetch question counts for each quiz
       const quizzesWithQuestions = await Promise.all(

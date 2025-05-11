@@ -36,10 +36,10 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', authenticateJWT, userRoutes);
+app.use('/api/admin',authenticateJWT, adminRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api', authenticateJWT, questionRoutes);
 app.use('/api/attempts', authenticateJWT, attemptRoutes);
-app.use('/api/admin',authenticateJWT, adminRoutes);
 
 // Health check route
 app.get('/health', (req, res) => {

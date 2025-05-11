@@ -2,20 +2,54 @@ const mongoose = require('mongoose');
 const Attempt = require('../models/attempt.model');
 const Quiz = require('../models/quiz.model');
 const Question = require('../models/question.model');
+const User = require('../models/user.model');
 
-// Start a new quiz attempt
+/**
+ * Start a new quiz attempt
+ * @route POST /api/attempts/start
+ * @access Private
+ */
 exports.startAttempt = async (req, res) => {
   try {
     const { quizId } = req.body;
     
+    // Validate quiz ID format
+    if (!mongoose.Types.ObjectId.isValid(quizId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid quiz ID format' 
+      });
+    }
+    
     // Validate quiz exists and is active
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Quiz not found' 
+      });
     }
     
-    if (!quiz.isActive && req.userRole !== 'admin') {
-      return res.status(403).json({ message: 'This quiz is not active' });
+    if (!quiz.isActive && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'This quiz is not active' 
+      });
+    }
+    
+    // Check if user already has an incomplete attempt for this quiz
+    const existingAttempt = await Attempt.findOne({
+      user: req.user.id,
+      quiz: quizId,
+      completedAt: null
+    });
+    
+    if (existingAttempt) {
+      return res.status(200).json({ 
+        success: true,
+        message: 'Continuing existing attempt', 
+        attempt: existingAttempt 
+      });
     }
     
     // Get total possible score
@@ -24,10 +58,11 @@ exports.startAttempt = async (req, res) => {
     
     // Create new attempt
     const attempt = new Attempt({
-      userId: req.userId,
-      quizId,
+      user: req.user.id,
+      quiz: quizId,
       maxScore,
-      startedAt: new Date()
+      startedAt: new Date(),
+      answers: []
     });
     
     const savedAttempt = await attempt.save();
@@ -38,40 +73,69 @@ exports.startAttempt = async (req, res) => {
     });
     
     res.status(201).json({
+      success: true,
       message: 'Quiz attempt started',
       attempt: savedAttempt
     });
   } catch (error) {
     console.error('Start attempt error:', error);
-    res.status(500).json({ message: 'Server error during attempt creation' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error during attempt creation',
+      error: error.message
+    });
   }
 };
 
-// Submit answer for a question
+/**
+ * Submit answer for a question
+ * @route POST /api/attempts/answer
+ * @access Private
+ */
 exports.submitAnswer = async (req, res) => {
   try {
     const { attemptId, questionId, selectedAnswer } = req.body;
     
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(attemptId) || !mongoose.Types.ObjectId.isValid(questionId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid ID format for attempt or question' 
+      });
+    }
+    
     // Find attempt
     const attempt = await Attempt.findById(attemptId);
     if (!attempt) {
-      return res.status(404).json({ message: 'Attempt not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Attempt not found' 
+      });
     }
     
     // Verify user owns this attempt
-    if (attempt.userId.toString() !== req.userId) {
-      return res.status(403).json({ message: 'Not authorized to submit to this attempt' });
+    if (attempt.user.toString() !== req.user.id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to submit to this attempt' 
+      });
     }
     
     // Check if attempt is already completed
     if (attempt.completedAt) {
-      return res.status(400).json({ message: 'This attempt is already completed' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'This attempt is already completed' 
+      });
     }
     
     // Find question
     const question = await Question.findById(questionId);
     if (!question) {
-      return res.status(404).json({ message: 'Question not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Question not found' 
+      });
     }
     
     // Check if answer already exists for this question
@@ -112,6 +176,12 @@ exports.submitAnswer = async (req, res) => {
         const correctText = question.options.find(o => o.isCorrect).text.toLowerCase();
         isCorrect = selectedAnswer.toLowerCase() === correctText;
         break;
+        
+      default:
+        return res.status(400).json({
+          success: false,
+          message: `Unsupported question type: ${question.type}`
+        });
     }
     
     // Calculate points
@@ -122,64 +192,107 @@ exports.submitAnswer = async (req, res) => {
       questionId,
       selectedAnswer,
       isCorrect,
-      pointsEarned
+      pointsEarned,
+      answeredAt: new Date()
     };
     
     if (existingAnswerIndex >= 0) {
       // Update existing answer
       const oldPoints = attempt.answers[existingAnswerIndex].pointsEarned || 0;
-      attempt.score = attempt.score - oldPoints + pointsEarned;
+      attempt.score = (attempt.score || 0) - oldPoints + pointsEarned;
       attempt.answers[existingAnswerIndex] = answer;
     } else {
       // Add new answer
       attempt.answers.push(answer);
-      attempt.score += pointsEarned;
+      attempt.score = (attempt.score || 0) + pointsEarned;
     }
     
     const updatedAttempt = await attempt.save();
     
     res.json({
+      success: true,
       message: 'Answer submitted successfully',
       answer,
       currentScore: updatedAttempt.score
     });
   } catch (error) {
     console.error('Submit answer error:', error);
-    res.status(500).json({ message: 'Server error during answer submission' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error during answer submission',
+      error: error.message
+    });
   }
 };
 
-// Complete a quiz attempt
+/**
+ * Complete a quiz attempt
+ * @route POST /api/attempts/:attemptId/complete
+ * @access Private
+ */
 exports.completeAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
+    const { timeTaken } = req.body; // Optional time taken in seconds
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(attemptId)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid attempt ID format' 
+      });
+    }
     
     // Find attempt
     const attempt = await Attempt.findById(attemptId);
     if (!attempt) {
-      return res.status(404).json({ message: 'Attempt not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Attempt not found' 
+      });
     }
     
     // Verify user owns this attempt
-    if (attempt.userId.toString() !== req.userId) {
-      return res.status(403).json({ message: 'Not authorized to complete this attempt' });
+    if (attempt.user.toString() !== req.user.id) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to complete this attempt' 
+      });
     }
     
     // Check if attempt is already completed
     if (attempt.completedAt) {
-      return res.status(400).json({ message: 'This attempt is already completed' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'This attempt is already completed' 
+      });
     }
     
-    // Mark as completed
+    // Mark as completed and record time if provided
     attempt.completedAt = new Date();
+    if (timeTaken) {
+      attempt.timeTaken = timeTaken;
+    } else {
+      // Calculate time taken based on startedAt
+      const endTime = new Date();
+      const startTime = new Date(attempt.startedAt);
+      attempt.timeTaken = Math.round((endTime - startTime) / 1000); // in seconds
+    }
     
     // Get quiz pass score
-    const quiz = await Quiz.findById(attempt.quizId);
-    const isPassed = attempt.score >= quiz.passScore;
+    const quiz = await Quiz.findById(attempt.quiz);
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: 'Quiz associated with this attempt not found'
+      });
+    }
     
+    const isPassed = attempt.score >= quiz.passScore;
     const completedAttempt = await attempt.save();
     
     res.json({
+      success: true,
       message: 'Quiz attempt completed',
       attempt: completedAttempt,
       isPassed,
@@ -187,89 +300,272 @@ exports.completeAttempt = async (req, res) => {
     });
   } catch (error) {
     console.error('Complete attempt error:', error);
-    res.status(500).json({ message: 'Server error during attempt completion' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error during attempt completion',
+      error: error.message
+    });
   }
 };
 
-// Get attempts by user
+/**
+ * Get attempts by the current user with filtering options
+ * @route GET /api/attempts/user
+ * @access Private
+ */
 exports.getUserAttempts = async (req, res) => {
   try {
-    const query = { userId: req.userId };
-    if (req.query.quiz) {
-      query.quizId = req.query.quiz;
+    const { category, quiz, status, sortBy = 'startedAt', sortOrder = 'desc' } = req.query;
+    
+    // Build query
+    const query = { user: req.user };
+    
+    // Add quiz filter if provided
+    if (quiz) {
+      if (!mongoose.Types.ObjectId.isValid(quiz)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid quiz ID format' 
+        });
+      }
+      query.quiz = quiz;
     }
-
+    
+    // Add category filter if provided
+    if (category) {
+      // Find quizzes in the category first
+      const categoryQuizzes = await Quiz.find({ category });
+      if (categoryQuizzes.length === 0) {
+        return res.json({ 
+          success: true,
+          attempts: [] 
+        });
+      }
+      const quizIds = categoryQuizzes.map(q => q._id);
+      query.quiz = { $in: quizIds };
+    }
+    
+    // Add status filter if provided
+    if (status === 'completed') {
+      query.completedAt = { $ne: null };
+    } else if (status === 'inProgress') {
+      query.completedAt = null;
+    }
+    
+    // Determine sort options
+    const sort = {};
+    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+    
+    // Handle special case of nested sorting (like quiz.title)
+    if (sortBy.includes('.')) {
+      const [parentField, childField] = sortBy.split('.');
+      
+      const lookupStage = {
+        $lookup: {
+          from: parentField === 'quiz' ? 'quizzes' : `${parentField}s`,
+          localField: parentField,
+          foreignField: '_id',
+          as: `${parentField}Data`
+        }
+      };
+      
+      const unwindStage = {
+        $unwind: {
+          path: `$${parentField}Data`,
+          preserveNullAndEmptyArrays: true
+        }
+      };
+      
+      const matchStage = { $match: query };
+      
+      const sortStage = {
+        $sort: {
+          [`${parentField}Data.${childField}`]: sortOrder === 'asc' ? 1 : -1
+        }
+      };
+      
+      const attempts = await Attempt.aggregate([
+        matchStage,
+        lookupStage,
+        unwindStage,
+        sortStage
+      ]);
+      
+      // Populate necessary fields after aggregation
+      const populatedAttempts = await Attempt.populate(attempts, [
+        {
+          path: 'quiz',
+          select: 'title category difficulty timeLimit passScore'
+        },
+        {
+          path: 'user',
+          select: 'name email'
+        }
+      ]);
+      
+      return res.json({ 
+        success: true,
+        attempts: populatedAttempts 
+      });
+    }
+    
+    // Regular sorting
     const attempts = await Attempt.find(query)
-      .populate('quizId', 'title category difficulty')
-      .select('-answers')
-      .sort({ createdAt: -1 });
-
-    res.json({ attempts });
+      .populate('quiz', 'title category difficulty timeLimit passScore')
+      .select('-answers.selectedAnswer') // Don't send answers by default
+      .sort(sort);
+    
+    res.json({ 
+      success: true,
+      attempts 
+    });
   } catch (error) {
     console.error('Get user attempts error:', error);
-    res.status(500).json({ message: 'Server error fetching attempts' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error fetching attempts',
+      error: error.message
+    });
   }
 };
 
-
-// Get attempt details
+/**
+ * Get all attempts (admin only)
+ * @route GET /api/attempts/all
+ * @access Admin
+ */
 exports.getAllAttempts = async (req, res) => {
   try {
-    const attempts = await Attempt.find()
+    // Check for admin role
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this resource'
+      });
+    }
+    
+    const { category, user, quiz, status, sortBy = 'startedAt', sortOrder = 'desc' } = req.query;
+    
+    // Build query based on filters
+    const query = {};
+    
+    // Add user filter if provided
+    if (user && mongoose.Types.ObjectId.isValid(user)) {
+      query.user = user;
+    }
+    
+    // Add quiz filter if provided
+    if (quiz && mongoose.Types.ObjectId.isValid(quiz)) {
+      query.quiz = quiz;
+    }
+    
+    // Add category filter if provided
+    if (category) {
+      const categoryQuizzes = await Quiz.find({ category });
+      const quizIds = categoryQuizzes.map(q => q._id);
+      query.quiz = { $in: quizIds };
+    }
+    
+    // Add status filter if provided
+    if (status === 'completed') {
+      query.completedAt = { $ne: null };
+    } else if (status === 'inProgress') {
+      query.completedAt = null;
+    }
+    
+    // Determine sort options
+    const sort = {};
+    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+    
+    const attempts = await Attempt.find(query)
       .populate({
-        path: 'user',  // Keep using 'user' even though schema has 'userId'
-        select: 'name email',
-        strictPopulate: false  // This tells Mongoose to ignore schema mismatch
+        path: 'user',
+        select: 'name email'
       })
-      .populate('quizId', 'title')
-      .sort({ createdAt: -1 })
+      .populate({
+        path: 'quiz',
+        select: 'title category difficulty'
+      })
+      .sort(sort)
       .lean();
     
-    res.status(200).json({ attempts });
+    res.status(200).json({ 
+      success: true,
+      attempts 
+    });
   } catch (error) {
     console.error('Error getting all attempts:', error);
-    res.status(500).json({ message: 'Failed to fetch attempts', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch attempts', 
+      error: error.message 
+    });
   }
 };
 
-
-// Get quiz statistics
+/**
+ * Get quiz statistics
+ * @route GET /api/attempts/stats/:quizId
+ * @access Private/Quiz Creator or Admin
+ */
 exports.getQuizStats = async (req, res) => {
   try {
     const { quizId } = req.params;
     
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(quizId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid quiz ID format'
+      });
+    }
+    
     // Verify quiz exists
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'Quiz not found'
+      });
     }
     
     // Check authorization for non-public stats
-    const isAuthorized = req.userRole === 'admin' || quiz.createdBy.toString() === req.userId;
+    const isAuthorized = req.user.role === 'admin' || 
+                         (quiz.createdBy && quiz.createdBy.toString() === req.user.id);
     
     // Get basic stats
-    const totalAttempts = await Attempt.countDocuments({ quizId });
+    const totalAttempts = await Attempt.countDocuments({ quiz: quizId });
     const completedAttempts = await Attempt.countDocuments({ 
-      quizId, 
-      completedAt: { $exists: true } 
+      quiz: quizId, 
+      completedAt: { $ne: null } 
     });
     
     // Get average score from completed attempts
     const avgScoreResult = await Attempt.aggregate([
-      { $match: { quizId: new mongoose.Types.ObjectId(quizId), completedAt: { $exists: true } } },
+      { $match: { quiz: new mongoose.Types.ObjectId(quizId), completedAt: { $ne: null } } },
       { $group: { _id: null, avgScore: { $avg: '$score' } } }
     ]);
     
-    const avgScore = avgScoreResult.length > 0 ? avgScoreResult[0].avgScore : 0;
+    const avgScore = avgScoreResult.length > 0 ? Math.round(avgScoreResult[0].avgScore * 10) / 10 : 0;
     
     // Get pass rate
     const passedAttempts = await Attempt.countDocuments({
-      quizId,
-      completedAt: { $exists: true },
+      quiz: quizId,
+      completedAt: { $ne: null },
       score: { $gte: quiz.passScore }
     });
     
-    const passRate = completedAttempts > 0 ? (passedAttempts / completedAttempts) * 100 : 0;
+    const passRate = completedAttempts > 0 
+      ? Math.round((passedAttempts / completedAttempts) * 1000) / 10 
+      : 0;
+    
+    // Get average time taken
+    const avgTimeResult = await Attempt.aggregate([
+      { $match: { quiz: new mongoose.Types.ObjectId(quizId), completedAt: { $ne: null }, timeTaken: { $exists: true } } },
+      { $group: { _id: null, avgTime: { $avg: '$timeTaken' } } }
+    ]);
+    
+    const avgTime = avgTimeResult.length > 0 ? Math.round(avgTimeResult[0].avgTime) : 0;
     
     // Get question performance if authorized
     let questionStats = [];
@@ -278,7 +574,7 @@ exports.getQuizStats = async (req, res) => {
       
       for (const question of questions) {
         const attemptsWithQuestion = await Attempt.find({
-          quizId,
+          quiz: quizId,
           'answers.questionId': question._id
         });
         
@@ -291,85 +587,91 @@ exports.getQuizStats = async (req, res) => {
         
         questionStats.push({
           questionId: question._id,
-          text: question.text,
-          correctRate: totalAnswers > 0 ? (correctAnswers / totalAnswers) * 100 : 0,
+          text: question.text.substring(0, 50) + (question.text.length > 50 ? '...' : ''),
+          correctRate: totalAnswers > 0 ? Math.round((correctAnswers / totalAnswers) * 1000) / 10 : 0,
           attemptsCount: totalAnswers
         });
       }
+      
+      // Sort question stats by correct rate (ascending)
+      questionStats.sort((a, b) => a.correctRate - b.correctRate);
     }
     
     res.json({
+      success: true,
       stats: {
         totalAttempts,
         completedAttempts,
         avgScore,
         passRate,
+        avgTimeTaken: avgTime,
+        passedCount: passedAttempts,
         questionStats: isAuthorized ? questionStats : undefined
       }
     });
   } catch (error) {
     console.error('Get quiz stats error:', error);
-    res.status(500).json({ message: 'Server error while fetching quiz statistics' });
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching quiz statistics',
+      error: error.message
+    });
   }
 };
 
-exports.getAttemptDetails = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Validate ObjectId format first
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid attempt ID format' });
-    }
-
-    const attempt = await Attempt.findById(id)
-      .populate('quiz', 'title category difficulty')
-      .populate({
-        path: 'user',
-        select: 'name email',
-        strictPopulate: false,
-      });
-
-    if (!attempt) {
-      return res.status(404).json({ message: 'Attempt not found' });
-    }
-
-    // Authorization check - compare ObjectIds directly
-    if (
-      req.userRole !== 'admin' &&
-      !attempt.user._id.equals(req.userId)
-    ) {
-      return res.status(403).json({ message: 'Not authorized to view this attempt' });
-    }
-
-    res.json({ attempt });
-  } catch (error) {
-    console.error('Get attempt details error:', error);
-    res.status(500).json({ message: 'Server error fetching attempt details' });
-  }
-};
-
-exports.getAttemptById = async (req, res, next) => {
+/**
+ * Get attempt by ID with detailed information
+ * @route GET /api/attempts/:id
+ * @access Private/Owner or Admin
+ */
+exports.getAttemptById = async (req, res) => {
   try {
     const { id } = req.params;
     
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new BadRequestError('Invalid attempt ID');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attempt ID format'
+      });
     }
 
     const attempt = await Attempt.findById(id)
-      .populate('quiz', 'title description category difficulty timeLimit passScore')
-      .populate('answers.questionId', 'question options correctAnswer explanation');
-
+      .populate('quiz', 'title description category difficulty timeLimit passScore questions')
+      .populate('user', 'name email');
+      
     if (!attempt) {
-      throw new NotFoundError('Attempt not found');
+      return res.status(404).json({
+        success: false,
+        message: 'Attempt not found'
+      });
     }
 
     // Check if the attempt belongs to the current user or if the user is an admin
-    if (attempt.user.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (attempt.user !== req.user && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to view this attempt'
+      });
+    }
+    
+    // Now populate the questions for the quiz
+    if (attempt.quiz && attempt.quiz.questions) {
+      const questions = await Question.find({ 
+        _id: { $in: attempt.quiz.questions }
+      }).select('-options.isCorrect'); // Don't send correct answers to client
+      
+      // Format the response
+      const formattedAttempt = {
+        ...attempt.toObject(),
+        quiz: {
+          ...attempt.quiz.toObject(),
+          questions
+        }
+      };
+      
+      return res.status(200).json({
+        success: true,
+        attempt: formattedAttempt
       });
     }
 
@@ -378,6 +680,60 @@ exports.getAttemptById = async (req, res, next) => {
       attempt
     });
   } catch (error) {
-    next(error);
+    console.error('Get attempt by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching attempt',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete an attempt
+ * @route DELETE /api/attempts/:id
+ * @access Private/Admin
+ */
+exports.deleteAttempt = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid attempt ID format'
+      });
+    }
+    
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete attempts'
+      });
+    }
+    
+    const attempt = await Attempt.findById(id);
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attempt not found'
+      });
+    }
+    
+    await Attempt.findByIdAndDelete(id);
+    
+    res.json({
+      success: true,
+      message: 'Attempt deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting attempt:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete attempt',
+      error: error.message
+    });
   }
 };

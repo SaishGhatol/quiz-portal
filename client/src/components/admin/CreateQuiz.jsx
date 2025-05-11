@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate,Link} from 'react-router-dom';
+import { useNavigate, Link ,useParams} from 'react-router-dom';
+import { Save } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'react-toastify';
 
 const CreateQuiz = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     title: '',
@@ -20,7 +22,8 @@ const CreateQuiz = () => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : 
+              type === 'number' ? parseInt(value, 10) || 0 : value
     });
   };
 
@@ -28,31 +31,56 @@ const CreateQuiz = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      const response = await api.post('/', formData);
-      console.log(response);
+      
+      // Form data validation
+      if (!formData.title || !formData.description || !formData.category || 
+          !formData.difficulty || formData.passScore === '') {
+        toast.error('Please fill all required fields');
+        setLoading(false);
+        return;
+      }
+      
+      // Ensure numeric fields are numbers
+      const formattedData = {
+        ...formData,
+        timeLimit: parseInt(formData.timeLimit, 10) || 0,
+        passScore: parseInt(formData.passScore, 10) || 0
+      };
+      
+      console.log('Submitting quiz data:', formattedData);
+      
+      // Make API request
+      const response = await api.post('/admin/quizzes/create', formattedData);
+      
       toast.success('Quiz created successfully');
       navigate(`/admin/quizzes/${response.data.quiz._id}/questions`);
     } catch (error) {
       console.error('Error creating quiz:', error);
-      toast.error(error.response?.data?.message || 'Failed to create quiz');
+      
+      // Better error handling
+      const errorMessage = error.response?.data?.details || 
+                           error.response?.data?.message || 
+                           'Failed to create quiz';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Create New Quiz</h1>
+      <div className="flex items-center justify-between mb-10 px-4 py-3 bg-white shadow-md rounded-2xl">
+        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+          Create New Quiz
+        </h1>
         <Link 
-            to="/admin/quizzes" 
-            className="bg-gray-500 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Quizzes
-          </Link>
+          to="/admin/quizzes" 
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-600 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition duration-300 shadow hover:shadow-lg"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Quizzes
+        </Link>
       </div>
 
       <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-100">
@@ -163,6 +191,7 @@ const CreateQuiz = () => {
               <div className="relative">
                 <input
                   type="checkbox"
+                  id="isPublished"
                   name="isPublished"
                   checked={formData.isPublished}
                   onChange={handleChange}
@@ -185,24 +214,29 @@ const CreateQuiz = () => {
             <button
               type="button"
               onClick={() => navigate('/admin/quizzes')}
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-150"
+              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-150 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className={`px-6 py-3 bg-blue-600 rounded-lg text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`inline-flex items-center px-6 py-3 bg-blue-600 rounded-lg text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 cursor-pointer ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {loading ? (
-                <span className="flex items-center">
+                <>
                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   Creating...
-                </span>
-              ) : 'Create Quiz'}
+                </>
+              ) : (
+                <>
+                  <Save size={18} className="mr-2" />
+                  Create Quiz
+                </>
+              )}
             </button>
           </div>
         </form>

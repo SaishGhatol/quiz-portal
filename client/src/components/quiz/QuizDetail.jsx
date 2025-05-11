@@ -13,6 +13,7 @@ const QuizDetail = () => {
   const [error, setError] = useState(null);
   const [userAttempts, setUserAttempts] = useState([]);
   const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [questionCount, setQuestionCount] = useState(0);
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -31,6 +32,26 @@ const QuizDetail = () => {
       }
     };
 
+    fetchQuiz();
+  }, [id]);
+
+  useEffect(() => {
+    const fetchQuestionCount = async () => {
+      if (id) {
+        try {
+          const questionsRes = await api.get(`/quizzes/${id}/questions`);
+          setQuestionCount(questionsRes.data.questions.length);
+        } catch (err) {
+          console.error(`Error fetching questions for quiz ${id}:`, err);
+          setQuestionCount(0);
+        }
+      }
+    };
+    
+    fetchQuestionCount();
+  }, [id]);
+
+  useEffect(() => {
     const fetchUserAttempts = async () => {
       if (!currentUser) return;
       
@@ -49,8 +70,7 @@ const QuizDetail = () => {
         setAttemptsLoading(false);
       }
     };
-    
-    fetchQuiz();
+
     fetchUserAttempts();
   }, [id, currentUser]);
 
@@ -159,7 +179,7 @@ const QuizDetail = () => {
             
             <div className="bg-gray-50 p-4 rounded-md">
               <div className="text-sm text-gray-500">Number of Questions</div>
-              <div className="font-medium">{quiz.totalQuestions}</div>
+              <div className="font-medium">{questionCount}</div>
             </div>
             
             <div className="bg-gray-50 p-4 rounded-md">

@@ -1,152 +1,111 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Save, Plus, Trash, MoveUp, MoveDown, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useParams } from 'react-router-dom';
+import { Save, AlertCircle } from 'lucide-react';
+import api from '../../utils/api';
+import { toast } from 'react-toastify'
 
-export default function CreateQuizForm() {
+const EditQuiz = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     timeLimit: 0,
     isPublished: false,
   });
-  
-  const [questions, setQuestions] = useState([
-    { 
-      id: 1, 
-      text: '', 
-      type: 'multiple-choice',
-      options: [
-        { id: 1, text: '', isCorrect: false },
-        { id: 2, text: '', isCorrect: false }
-      ] 
+
+  useEffect(() => {
+    // Fetch quiz data when component mounts
+    fetchQuizData();
+  }, [id]); // Using quizId in dependency array
+
+  const fetchQuizData = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/quizzes/${id}`);
+      
+      // Set form data with the fetched quiz data
+      const quizData = response.data.quiz;
+      setFormData({
+        title: quizData.title || '',
+        description: quizData.description || '',
+        timeLimit: quizData.timeLimit || 0,
+        isPublished: quizData.isPublished || false,
+      });
+      
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching quiz data:', error);
+      setError('Failed to load quiz data. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : type === 'number' ? parseInt(value, 10) || 0 : value
     });
-  };
-
-  const addQuestion = () => {
-    const newId = questions.length > 0 
-      ? Math.max(...questions.map(q => q.id)) + 1 
-      : 1;
-    
-    setQuestions([...questions, {
-      id: newId,
-      text: '',
-      type: 'multiple-choice',
-      options: [
-        { id: 1, text: '', isCorrect: false },
-        { id: 2, text: '', isCorrect: false }
-      ]
-    }]);
-  };
-
-  const removeQuestion = (questionId) => {
-    setQuestions(questions.filter(q => q.id !== questionId));
-  };
-
-  const moveQuestionUp = (index) => {
-    if (index === 0) return;
-    const newQuestions = [...questions];
-    const temp = newQuestions[index];
-    newQuestions[index] = newQuestions[index - 1];
-    newQuestions[index - 1] = temp;
-    setQuestions(newQuestions);
-  };
-
-  const moveQuestionDown = (index) => {
-    if (index === questions.length - 1) return;
-    const newQuestions = [...questions];
-    const temp = newQuestions[index];
-    newQuestions[index] = newQuestions[index + 1];
-    newQuestions[index + 1] = temp;
-    setQuestions(newQuestions);
-  };
-
-  const updateQuestion = (id, field, value) => {
-    setQuestions(questions.map(q => q.id === id ? {...q, [field]: value} : q));
-  };
-
-  const addOption = (questionId) => {
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        const newOptionId = q.options.length > 0 
-          ? Math.max(...q.options.map(o => o.id)) + 1 
-          : 1;
-        return {
-          ...q,
-          options: [...q.options, { id: newOptionId, text: '', isCorrect: false }]
-        };
-      }
-      return q;
-    }));
-  };
-
-  const removeOption = (questionId, optionId) => {
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        return {
-          ...q,
-          options: q.options.filter(o => o.id !== optionId)
-        };
-      }
-      return q;
-    }));
-  };
-
-  const updateOption = (questionId, optionId, field, value) => {
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        return {
-          ...q,
-          options: q.options.map(o => 
-            o.id === optionId ? {...o, [field]: value} : o
-          )
-        };
-      }
-      return q;
-    }));
-  };
-
-  const setCorrectOption = (questionId, optionId) => {
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        return {
-          ...q,
-          options: q.options.map(o => 
-            ({...o, isCorrect: o.id === optionId})
-          )
-        };
-      }
-      return q;
-    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     
-    // Simulating API call
-    setTimeout(() => {
-      console.log({ ...formData, questions });
+    try {
+      await api.put(`/quizzes/${id}`, formData);
+      toast.success('Quiz updated successfully');
+      navigate('/admin/quizzes');
+    } catch (error) {
+      console.error('Error updating quiz:', error);
+      toast.error(error.response?.data?.message || 'Failed to update quiz');
+    } finally {
       setSaving(false);
-      // Uncomment to navigate: navigate('/admin/quizzes');
-      alert('Quiz saved successfully!');
-    }, 1500);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto py-8 px-4 text-center">
+        <div className="flex flex-col items-center justify-center bg-white rounded-lg shadow-md p-8">
+          <svg className="animate-spin h-12 w-12 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-lg text-gray-600">Loading quiz data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-4xl mx-auto py-8 px-4 text-center">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-8 shadow-md">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-800 mb-2">Error Loading Quiz</h2>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={fetchQuizData} 
+            className="px-5 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-150 focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-10 px-4 py-3 bg-white shadow-md rounded-2xl">
         <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
-          Create New Quiz
+          Edit Quiz
         </h1>
         <Link
           to="/admin/quizzes"
@@ -226,6 +185,7 @@ export default function CreateQuizForm() {
               <div className="relative">
                 <input
                   type="checkbox"
+                  id="isPublished"
                   name="isPublished"
                   checked={formData.isPublished}
                   onChange={handleChange}
@@ -242,6 +202,7 @@ export default function CreateQuizForm() {
               </div>
             </label>
           </div>
+          
           
           {/* Action Buttons */}
           <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 ">
@@ -268,7 +229,7 @@ export default function CreateQuizForm() {
               ) : (
                 <>
                   <Save size={18} className="mr-2" />
-                  Save Quiz
+                  Update Quiz
                 </>
               )}
             </button>
@@ -278,3 +239,5 @@ export default function CreateQuizForm() {
     </div>
   );
 }
+
+export default EditQuiz;

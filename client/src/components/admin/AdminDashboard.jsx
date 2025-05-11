@@ -50,7 +50,7 @@ const AdminDashboard = () => {
       
       const fetchQuizzes = async (retryCount = 0) => {
         try {
-          const response = await api.get('/admin/quizzes/recent?limit=5');
+          const response = await api.get('/admin/quizzes');
           return response.data.quizzes;
         } catch (error) {
           if (retryCount < 2 && (error.response?.status === 500 || !error.response)) {
@@ -67,7 +67,8 @@ const AdminDashboard = () => {
       
       const fetchAttempts = async (retryCount = 0) => {
         try {
-          const response = await api.get('/admin/attempts?limit=5');
+          // Change this to fetch recent attempts without requiring a quiz ID
+          const response = await api.get('/admin/attempts/recent');
           return response.data.attempts;
         } catch (error) {
           if (retryCount < 2 && (error.response?.status === 500 || !error.response)) {

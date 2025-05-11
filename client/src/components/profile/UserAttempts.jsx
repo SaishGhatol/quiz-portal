@@ -1,4 +1,3 @@
-// src/components/profile/UserAttempts.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
@@ -8,8 +7,8 @@ const UserAttempts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
-    quizCategory: '',
-    sortBy: 'date',
+    category: '',
+    sortBy: 'createdAt',
     sortOrder: 'desc'
   });
   
@@ -18,15 +17,22 @@ const UserAttempts = () => {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        if (filters.quizCategory) params.append('category', filters.quizCategory);
+        if (filters.category) params.append('category', filters.category);
         params.append('sortBy', filters.sortBy);
         params.append('sortOrder', filters.sortOrder);
         
-        // Make the API call with the query parameters
-        const response = await api.get(`attempts?${params}`);
+        // API call with query parameters
+        const response = await api.get(`/attempts/user`);
         
         // Set attempts from the response
-        setAttempts(response.data.attempts || []);
+        if (response.data && response.data.attempts) {
+          // Log for debugging
+          console.log('Fetched attempts:', response.data.attempts);
+          setAttempts(response.data.attempts);
+        } else {
+          console.warn('No attempts found in response:', response.data);
+          setAttempts([]);
+        }
         setError(null);
       } catch (error) {
         console.error('Error fetching attempts:', error);
@@ -42,6 +48,7 @@ const UserAttempts = () => {
     };
     
     fetchAttempts();
+    
   }, [filters]);
   
   const handleFilterChange = (e) => {
@@ -52,19 +59,41 @@ const UserAttempts = () => {
     }));
   };
   
-  const getScoreBadgeColor = (score) => {
-    // Ensure score is a number and not null/undefined
-    const numScore = Number(score) || 0;
+  const getScoreBadgeColor = (score, maxScore) => {
+    // Calculate percentage score if both score and maxScore are available
+    let percentageScore;
+    if (score !== null && score !== undefined && maxScore) {
+      percentageScore = (score / maxScore) * 100;
+    } else {
+      percentageScore = score || 0;
+    }
     
-    if (numScore >= 80) return 'bg-green-100 text-green-800';
-    if (numScore >= 60) return 'bg-blue-100 text-blue-800';
-    if (numScore >= 40) return 'bg-yellow-100 text-yellow-800';
+    if (percentageScore >= 80) return 'bg-green-100 text-green-800';
+    if (percentageScore >= 60) return 'bg-blue-100 text-blue-800';
+    if (percentageScore >= 40) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
   };
   
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const formatScore = (score, maxScore) => {
+    if (score === null || score === undefined) return 'N/A';
+    if (maxScore) {
+      return `${score}/${maxScore} (${Math.round((score / maxScore) * 100)}%)`;
+    }
+    return `${score} pts`;
+  };
+
+  // Helper function to safely access quiz properties
+  const getQuizProperty = (attempt, property, defaultValue = 'Unknown') => {
+    if (!attempt) return defaultValue;
+    if (attempt.quiz && attempt.quiz[property] !== undefined && attempt.quiz[property] !== null) {
+      return attempt.quiz[property];
+    }
+    return defaultValue;
   };
   
   if (loading) {
@@ -123,8 +152,8 @@ const UserAttempts = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
             <div className="relative">
               <select
-                name="quizCategory"
-                value={filters.quizCategory}
+                name="category"
+                value={filters.category}
                 onChange={handleFilterChange}
                 className="w-full p-3 bg-gray-50 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
@@ -154,9 +183,9 @@ const UserAttempts = () => {
                 onChange={handleFilterChange}
                 className="w-full p-3 bg-gray-50 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="date">Date</option>
+                <option value="createdAt">Date</option>
                 <option value="score">Score</option>
-                <option value="quiz">Quiz Name</option>
+                <option value="quiz.title">Quiz Name</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -187,7 +216,6 @@ const UserAttempts = () => {
           </div>
         </div>
       </div>
-      
       {/* Attempts List */}
       {attempts.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
@@ -211,6 +239,7 @@ const UserAttempts = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -219,23 +248,34 @@ const UserAttempts = () => {
                   <tr key={attempt._id || `temp-${Math.random()}`} className="hover:bg-gray-50 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {attempt.quizId?.title || 'Untitled Quiz'}
+                        {getQuizProperty(attempt, 'title', 'Untitled Quiz')}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {attempt.quizId?.category || 'Uncategorized'}
+                        {getQuizProperty(attempt, 'category', 'Uncategorized')}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-500">
-                        {formatDate(attempt.createdAt)}
+                        {formatDate(attempt.startedAt || attempt.createdAt)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getScoreBadgeColor(attempt.score)}`}>
-                        {attempt.score !== null && attempt.score !== undefined ? `${attempt.score}%` : 'N/A'}
+                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getScoreBadgeColor(attempt.score, attempt.maxScore)}`}>
+                        {formatScore(attempt.score, attempt.maxScore)}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {attempt.completedAt ? (
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Completed
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                          In Progress
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-3">
@@ -249,15 +289,15 @@ const UserAttempts = () => {
                           </svg>
                           View Details
                         </Link>
-                        {attempt.quizId?._id && (
+                        {attempt.quiz && attempt.quiz._id && (
                           <Link 
-                            to={`/quiz/${attempt.quizId._id}`} 
+                            to={`/quiz/${attempt.quiz._id}`} 
                             className="text-green-600 hover:text-green-900 flex items-center"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            Retake Quiz
+                            {attempt.completedAt ? 'Retake Quiz' : 'Continue Quiz'}
                           </Link>
                         )}
                       </div>

@@ -27,9 +27,9 @@ const quizSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  isActive: {
+  isPublished: {
     type: Boolean,
-    default: true
+    default: false
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
