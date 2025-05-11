@@ -33,7 +33,7 @@ const TakeQuiz = () => {
 
         // Set timer if quiz has a time limit
         if (response.data.quiz.timeLimit) {
-          setTimeLeft(response.data.quiz.timeLimit * 60); // convert minutes to seconds
+          setTimeLeft(response.data.quiz.timeLimit * 60);
         }
 
         setError(null);
@@ -278,181 +278,171 @@ const TakeQuiz = () => {
   const progressPercentage = (countAnsweredQuestions() / questions.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white py-4 md:py-8 px-3 md:px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          {/* Quiz header with timer */}
-          <div className="bg-blue-600 p-3 md:p-4 flex flex-col md:flex-row justify-between items-center gap-2">
-            <h1 className="text-lg md:text-xl font-bold text-white text-center md:text-left">{quiz.title}</h1>
-            {timeLeft !== null && (
-              <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1 md:px-4 md:py-2 flex items-center">
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-white mr-1 md:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span className={`text-base md:text-lg font-medium ${timeLeft < 60 ? 'text-red-200 animate-pulse' : 'text-white'}`}>
-                  {formatTime(timeLeft)}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Progress section */}
-          <div className="bg-gray-50 px-4 md:px-6 py-3 md:py-4">
-            <div className="flex justify-between text-xs md:text-sm text-gray-600 mb-1">
-              <span className="font-medium">Your Progress</span>
-              <span className="font-medium">{countAnsweredQuestions()} of {questions.length} answered</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 md:h-3">
-              <div
-                className={`h-2 md:h-3 rounded-full transition-all duration-500 ease-out ${
-                  progressPercentage < 30 ? 'bg-red-500' : 
-                  progressPercentage < 70 ? 'bg-yellow-500' : 'bg-green-500'
-                }`}
-                style={{ width: `${progressPercentage}%` }}
-              ></div>
+    <div className="min-h-screen bg-gray-50 py-6 px-4">
+    <div className="max-w-3xl mx-auto">
+      {/* Quiz header */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        <div className="bg-blue-500 p-4">
+          <h1 className="text-xl font-bold text-white text-center">{quiz.title}</h1>
+        </div>
+        
+        {/* Timer (if needed) */}
+        {timeLeft !== null && (
+          <div className="bg-gray-100 p-3 flex justify-center">
+            <div className="flex items-center">
+              <svg className="w-5 h-5 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span className="text-lg font-medium text-gray-700">
+                {formatTime(timeLeft)}
+              </span>
             </div>
           </div>
-
-          <div className="p-4 md:p-6">
-            {/* Question content */}
-            <div className="bg-blue-50 rounded-xl p-4 md:p-6 mb-4 md:mb-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-2">
-                <h2 className="text-lg md:text-xl font-semibold text-blue-800">Question {currentQuestionIndex + 1} of {questions.length}</h2>
-                <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-medium ${
-                  isQuestionAnswered(currentQuestion._id) ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                }`}>
-                  {isQuestionAnswered(currentQuestion._id) ? 'Answered' : 'Not Answered'}
-                </span>
-              </div>
-              <p className="text-base md:text-lg text-gray-800 font-medium mb-4 md:mb-6">{currentQuestion.text}</p>
-
-              <div className="space-y-2 md:space-y-3 mt-3 md:mt-4">
-                {currentQuestion.options.map((option) => {
-                  const optionId = option._id || `option-${option.text}`;
-                  const isSelected = answers[currentQuestion._id] === optionId;
-                  
-                  return (
-                    <div 
-                      key={optionId} 
-                      className={`flex items-center p-2 md:p-3 rounded-lg border-2 transition-all duration-200 ${
-                        isSelected 
-                          ? 'border-blue-500 bg-blue-50' 
-                          : 'border-gray-200 hover:border-blue-300 bg-white'
-                      }`}
-                      onClick={() => handleAnswerSelect(currentQuestion._id, optionId)}
-                    >
-                      <div className={`w-4 h-4 md:w-5 md:h-5 flex-shrink-0 rounded-full border ${
-                        isSelected 
-                          ? 'bg-blue-500 border-blue-500' 
-                          : 'border-gray-400'
-                      }`}>
-                        {isSelected && (
-                          <svg className="w-4 h-4 md:w-5 md:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                          </svg>
-                        )}
-                      </div>
-                      <label 
-                        htmlFor={`option-${currentQuestion._id}-${optionId}`} 
-                        className="ml-2 md:ml-3 text-sm md:text-base text-gray-700 cursor-pointer flex-1 font-medium"
-                      >
-                        {option.text}
-                      </label>
-                      <input
-                        type="radio"
-                        id={`option-${currentQuestion._id}-${optionId}`}
-                        name={`question-${currentQuestion._id}`}
-                        className="hidden"
-                        checked={isSelected}
-                        onChange={() => handleAnswerSelect(currentQuestion._id, optionId)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Question navigation grid - scrollable for mobile */}
-            <div className="mb-6 md:mb-8">
-              <h3 className="text-xs md:text-sm font-medium text-gray-700 mb-2 md:mb-3">Questions Navigation</h3>
-              <div className="flex overflow-x-auto pb-2 gap-1 md:gap-2 hide-scrollbar">
-                {questions.map((q, index) => {
-                  let bgColor = "bg-gray-200 text-gray-700";
-                  
-                  if (currentQuestionIndex === index) {
-                    bgColor = "bg-blue-600 text-white";
-                  } else if (isQuestionAnswered(q._id)) {
-                    bgColor = "bg-green-500 text-white";
-                  }
-                  
-                  return (
-                    <button
-                      key={q._id || `question-${index}`}
-                      onClick={() => goToQuestion(index)}
-                      className={`min-w-7 w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-md text-xs md:text-sm font-medium
-                        ${bgColor} transition-all duration-200 hover:shadow-md flex-shrink-0`}
-                    >
-                      {index + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Navigation buttons */}
-            <div className="flex justify-between">
-              <button
-                onClick={goToPreviousQuestion}
-                disabled={currentQuestionIndex === 0}
-                className={`px-3 md:px-5 py-2 rounded-lg text-sm md:text-base font-medium flex items-center transition duration-200 ${
-                  currentQuestionIndex === 0
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                <svg className="w-4 h-4 md:w-5 md:h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
-                </svg>
-                Previous
-              </button>
-
-              {currentQuestionIndex < questions.length - 1 ? (
-                <button
-                  onClick={goToNextQuestion}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-5 py-2 rounded-lg text-sm md:text-base font-medium flex items-center transition duration-200 shadow-md hover:shadow-lg"
-                >
-                  Next
-                  <svg className="w-4 h-4 md:w-5 md:h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                  </svg>
-                </button>
-              ) : (
-                <button
-                  onClick={submitQuiz}
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 md:px-6 py-2 rounded-lg text-sm md:text-base font-medium flex items-center transition duration-200 shadow-md hover:shadow-lg"
-                >
-                  <svg className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                  Submit Quiz
-                </button>
-              )}
-            </div>
+        )}
+      </div>
+  
+      {/* Main quiz content */}
+      <div className="bg-white rounded-lg shadow-md p-5 mb-6">
+        {/* Progress indicator */}
+        <div className="mb-6">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>Your Progress</span>
+            <span>{countAnsweredQuestions()} of {questions.length} answered</span>
           </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className={`h-2 rounded-full ${
+                progressPercentage < 30 ? 'bg-red-400' : 
+                progressPercentage < 70 ? 'bg-yellow-400' : 'bg-green-400'
+              }`}
+              style={{ width: `${progressPercentage}%` }}
+            ></div>
+          </div>
+        </div>
+        
+        {/* Question */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">Question {currentQuestionIndex + 1} of {questions.length}</h2>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+              isQuestionAnswered(currentQuestion._id) ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+            }`}>
+              {isQuestionAnswered(currentQuestion._id) ? 'Answered' : 'Not Answered'}
+            </span>
+          </div>
+          <p className="text-gray-700 mb-6">{currentQuestion.text}</p>
           
-          {/* Add custom style for question navigation scrollbar */}
-          <style jsx>{`
-            .hide-scrollbar::-webkit-scrollbar {
-              display: none;
-            }
-            .hide-scrollbar {
-              -ms-overflow-style: none;
-              scrollbar-width: none;
-            }
-          `}</style>
+          {/* Options */}
+          <div className="space-y-3">
+            {currentQuestion.options.map((option) => {
+              const optionId = option._id || `option-${option.text}`;
+              const isSelected = answers[currentQuestion._id] === optionId;
+              
+              return (
+                <div 
+                  key={optionId} 
+                  className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
+                    isSelected 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                  onClick={() => handleAnswerSelect(currentQuestion._id, optionId)}
+                >
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                    isSelected 
+                      ? 'bg-blue-500 border-blue-500' 
+                      : 'border-gray-400'
+                  }`}>
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+                      </svg>
+                    )}
+                  </div>
+                  <label 
+                    htmlFor={`option-${currentQuestion._id}-${optionId}`} 
+                    className="ml-3 text-gray-700 cursor-pointer flex-1"
+                  >
+                    {option.text}
+                  </label>
+                  <input
+                    type="radio"
+                    id={`option-${currentQuestion._id}-${optionId}`}
+                    name={`question-${currentQuestion._id}`}
+                    className="hidden"
+                    checked={isSelected}
+                    onChange={() => handleAnswerSelect(currentQuestion._id, optionId)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        
+        {/* Question navigation */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-600 mb-2">Questions</h3>
+          <div className="flex flex-wrap gap-2">
+            {questions.map((q, index) => {
+              let bgColor = "bg-gray-100 text-gray-600";
+              
+              if (currentQuestionIndex === index) {
+                bgColor = "bg-blue-500 text-white";
+              } else if (isQuestionAnswered(q._id)) {
+                bgColor = "bg-green-400 text-white";
+              }
+              
+              return (
+                <button
+                  key={q._id || `question-${index}`}
+                  onClick={() => goToQuestion(index)}
+                  className={`w-8 h-8 flex items-center justify-center rounded ${bgColor}`}
+                >
+                  {index + 1}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        
+        {/* Navigation buttons */}
+        <div className="flex justify-between">
+          <button
+            onClick={goToPreviousQuestion}
+            disabled={currentQuestionIndex === 0}
+            className={`px-4 py-2 rounded text-sm font-medium ${
+              currentQuestionIndex === 0
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Previous
+          </button>
+  
+          {currentQuestionIndex < questions.length - 1 ? (
+            <button
+              onClick={goToNextQuestion}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              onClick={submitQuiz}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm font-medium"
+            >
+              Submit Quiz
+            </button>
+          )}
         </div>
       </div>
+      
+      {/* Instructions or helpful info */}
+      <div className="text-center text-sm text-gray-500">
+        <p>Answer all questions before submitting your quiz.</p>
+      </div>
     </div>
+  </div>
   );
 };
 

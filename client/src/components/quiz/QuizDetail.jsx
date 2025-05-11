@@ -8,7 +8,6 @@ const QuizDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
-  
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,13 +36,12 @@ const QuizDetail = () => {
       
       setAttemptsLoading(true);
       try {
-        const attemptsResponse = await api.get(`/attempts/my-attempts?quiz=${id}`);
+        // Corrected endpoint based on your schema structure
+        const attemptsResponse = await api.get(`/attempts/user?quiz=${id}`);
         setUserAttempts(attemptsResponse.data.attempts || []);
       } catch (error) {
         console.error('Error fetching attempts:', error);
-        // Don't show errors for attempts - just set empty array
         setUserAttempts([]);
-        // Only toast if it's not a "not found" error
         if (!(error.response?.status === 404 && error.response?.data?.message === 'Attempt not found')) {
           toast.warning('Could not load your previous attempts');
         }
@@ -51,7 +49,7 @@ const QuizDetail = () => {
         setAttemptsLoading(false);
       }
     };
-
+    
     fetchQuiz();
     fetchUserAttempts();
   }, [id, currentUser]);
@@ -212,7 +210,7 @@ const QuizDetail = () => {
                         {userAttempts.map((attempt) => (
                           <tr key={attempt._id}>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                              {formatDate(attempt.createdAt)}
+                              {formatDate(attempt.completedAt || attempt.createdAt)}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -220,7 +218,8 @@ const QuizDetail = () => {
                                 attempt.score >= 40 ? 'bg-yellow-100 text-yellow-800' : 
                                 'bg-red-100 text-red-800'
                               }`}>
-                                {attempt.score}%
+                                {/* Display score as percentage of maxScore */}
+                                {Math.round((attempt.score / attempt.maxScore) * 100)}%
                               </span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">

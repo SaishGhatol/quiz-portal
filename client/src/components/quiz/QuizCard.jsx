@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Award, HelpCircle } from 'lucide-react';
 
-const QuizCard = ({ quiz }) => {
+const QuizCard = ({ quiz , question }) => {
   const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
       case 'easy':
@@ -37,7 +37,7 @@ const QuizCard = ({ quiz }) => {
         <div className="flex items-center justify-between text-sm text-gray-500 mb-6">
           <div className="flex items-center">
             <HelpCircle className="h-4 w-4 mr-1" />
-            <span>{quiz.totalQuestions } questions</span>
+            <span>{quiz.totalQuestions} questions</span>
           </div>
           
           {quiz.estimatedTime && (

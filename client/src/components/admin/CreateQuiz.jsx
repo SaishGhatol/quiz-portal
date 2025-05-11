@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate,Link} from 'react-router-dom';
 import api from '../../utils/api';
 import { toast } from 'react-toastify';
 
@@ -28,7 +28,8 @@ const CreateQuiz = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      const response = await api.post('/quizzes', formData);
+      const response = await api.post('/', formData);
+      console.log(response);
       toast.success('Quiz created successfully');
       navigate(`/admin/quizzes/${response.data.quiz._id}/questions`);
     } catch (error) {
@@ -43,16 +44,15 @@ const CreateQuiz = () => {
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold text-gray-800">Create New Quiz</h1>
-        <button
-          type="button"
-          onClick={() => navigate('/admin/quizzes')}
-          className="flex items-center text-blue-400 hover:text-gray-800 border border-blue-500 rounded-lg px-4 py-2 "
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
-          </svg>
-          Back to Quizzes
-        </button>
+        <Link 
+            to="/admin/quizzes" 
+            className="bg-gray-500 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Quizzes
+          </Link>
       </div>
 
       <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-100">

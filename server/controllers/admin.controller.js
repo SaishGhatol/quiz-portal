@@ -32,6 +32,33 @@ exports.getDashboardStats = async (req, res, next) => {
   }
 };
 
+
+exports.createQuiz = async (req, res) => {
+  try {
+    const { title, description, category, difficulty, timeLimit, passScore } = req.body;
+
+    const quiz = new Quiz({
+      title,
+      description,
+      category,
+      difficulty,
+      timeLimit,
+      passScore,
+      createdBy: req.user
+    });
+
+    const savedQuiz = await quiz.save();
+    res.status(201).json({
+      message: 'Quiz created successfully',
+      quiz: savedQuiz
+    });
+  } catch (error) {
+    console.error('Create quiz error:', error);
+    res.status(500).json({ message: 'Server error creating quiz' });
+  }
+};
+
+
 /**
  * Get all quizzes with pagination
  */
@@ -304,21 +331,21 @@ exports.getQuizById = async (req, res, next) => {
       const recentQuizzes = await Quiz.find()
         .sort({ createdAt: -1 })
         .limit(1);
-      
+
       if (recentQuizzes.length === 0) {
         return res.status(404).json({ message: 'No quizzes found' });
       }
-      
+
       return res.status(200).json({ quiz: recentQuizzes[0] });
     }
-    
+
     // Regular case - find by ID
     const quiz = await Quiz.findById(req.params.id);
-    
+
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz not found' });
     }
-    
+
     res.status(200).json({ quiz });
   } catch (error) {
     next(error);
@@ -332,16 +359,16 @@ exports.getRecentAttempts = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
 
     // For the getRecentAttempts controller
+    // Change 'userId' to 'user' in populate
     const attempts = await Attempt.find({ quiz: quizId })
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate({
-        path: 'userId',  
+        path: 'user',  // Changed from 'userId'
         select: 'name email',
         model: 'User',
         strictPopulate: false
       });
-
 
 
     const formattedAttempts = attempts.map(attempt => {

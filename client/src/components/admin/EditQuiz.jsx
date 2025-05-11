@@ -1,43 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import api from '../../utils/api';
-import { toast } from 'react-toastify';
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Save, Plus, Trash, MoveUp, MoveDown, AlertCircle } from 'lucide-react';
 
-const EditQuiz = () => {
-  const { id } = useParams();
+export default function CreateQuizForm() {
   const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     timeLimit: 0,
     isPublished: false,
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchQuizData = async () => {
-      try {
-        const response = await api.get(`/quizzes/${id}`);
-        const { title, description, timeLimit, isPublished } = response.data.quiz;
-        setFormData({
-          title,
-          description,
-          timeLimit: timeLimit || 0,
-          isPublished: isPublished || false,
-        });
-        setError(null);
-      } catch (error) {
-        console.error('Error fetching quiz data:', error);
-        setError('Failed to load quiz data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuizData();
-  }, [id]);
+  
+  const [questions, setQuestions] = useState([
+    { 
+      id: 1, 
+      text: '', 
+      type: 'multiple-choice',
+      options: [
+        { id: 1, text: '', isCorrect: false },
+        { id: 2, text: '', isCorrect: false }
+      ] 
+    }
+  ]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -47,71 +32,144 @@ const EditQuiz = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      setSaving(true);
-      await api.put(`/quizzes/${id}`, formData);
-      toast.success('Quiz updated successfully');
-      navigate('/admin/quizzes');
-    } catch (error) {
-      console.error('Error updating quiz:', error);
-      toast.error(error.response?.data?.message || 'Failed to update quiz');
-    } finally {
-      setSaving(false);
-    }
+  const addQuestion = () => {
+    const newId = questions.length > 0 
+      ? Math.max(...questions.map(q => q.id)) + 1 
+      : 1;
+    
+    setQuestions([...questions, {
+      id: newId,
+      text: '',
+      type: 'multiple-choice',
+      options: [
+        { id: 1, text: '', isCorrect: false },
+        { id: 2, text: '', isCorrect: false }
+      ]
+    }]);
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto py-16 px-4 text-center">
-        <div className="flex flex-col items-center justify-center">
-          <svg className="animate-spin h-12 w-12 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <p className="text-lg text-gray-600">Loading quiz data...</p>
-        </div>
-      </div>
-    );
-  }
+  const removeQuestion = (questionId) => {
+    setQuestions(questions.filter(q => q.id !== questionId));
+  };
 
-  if (error) {
-    return (
-      <div className="max-w-4xl mx-auto py-16 px-4 text-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <svg className="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <h2 className="text-xl font-semibold text-red-800 mb-2">Error Loading Quiz</h2>
-          <p className="text-red-600">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition duration-150"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const moveQuestionUp = (index) => {
+    if (index === 0) return;
+    const newQuestions = [...questions];
+    const temp = newQuestions[index];
+    newQuestions[index] = newQuestions[index - 1];
+    newQuestions[index - 1] = temp;
+    setQuestions(newQuestions);
+  };
+
+  const moveQuestionDown = (index) => {
+    if (index === questions.length - 1) return;
+    const newQuestions = [...questions];
+    const temp = newQuestions[index];
+    newQuestions[index] = newQuestions[index + 1];
+    newQuestions[index + 1] = temp;
+    setQuestions(newQuestions);
+  };
+
+  const updateQuestion = (id, field, value) => {
+    setQuestions(questions.map(q => q.id === id ? {...q, [field]: value} : q));
+  };
+
+  const addOption = (questionId) => {
+    setQuestions(questions.map(q => {
+      if (q.id === questionId) {
+        const newOptionId = q.options.length > 0 
+          ? Math.max(...q.options.map(o => o.id)) + 1 
+          : 1;
+        return {
+          ...q,
+          options: [...q.options, { id: newOptionId, text: '', isCorrect: false }]
+        };
+      }
+      return q;
+    }));
+  };
+
+  const removeOption = (questionId, optionId) => {
+    setQuestions(questions.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          options: q.options.filter(o => o.id !== optionId)
+        };
+      }
+      return q;
+    }));
+  };
+
+  const updateOption = (questionId, optionId, field, value) => {
+    setQuestions(questions.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          options: q.options.map(o => 
+            o.id === optionId ? {...o, [field]: value} : o
+          )
+        };
+      }
+      return q;
+    }));
+  };
+
+  const setCorrectOption = (questionId, optionId) => {
+    setQuestions(questions.map(q => {
+      if (q.id === questionId) {
+        return {
+          ...q,
+          options: q.options.map(o => 
+            ({...o, isCorrect: o.id === optionId})
+          )
+        };
+      }
+      return q;
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    
+    // Simulating API call
+    setTimeout(() => {
+      console.log({ ...formData, questions });
+      setSaving(false);
+      // Uncomment to navigate: navigate('/admin/quizzes');
+      alert('Quiz saved successfully!');
+    }, 1500);
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Edit Quiz</h1>
-        <button
-          type="button"
-          onClick={() => navigate('/admin/quizzes')}
-          className="flex items-center text-gray-600 hover:text-gray-800"
+      <div className="flex items-center justify-between mb-10 px-4 py-3 bg-white shadow-md rounded-2xl">
+        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+          Create New Quiz
+        </h1>
+        <Link
+          to="/admin/quizzes"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-600 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition duration-300 shadow hover:shadow-lg"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            />
           </svg>
           Back to Quizzes
-        </button>
+        </Link>
       </div>
-      
+
       <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-100">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6">
@@ -161,7 +219,7 @@ const EditQuiz = () => {
               />
             </div>
           </div>
-          
+ 
           {/* Published Status */}
           <div className="pt-4 border-t border-gray-200">
             <label className="flex items-center cursor-pointer">
@@ -186,34 +244,37 @@ const EditQuiz = () => {
           </div>
           
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 ">
             <button
               type="button"
               onClick={() => navigate('/admin/quizzes')}
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-150"
+              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-150 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className={`px-6 py-3 bg-blue-600 rounded-lg text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`inline-flex items-center px-6 py-3 bg-blue-600 rounded-lg text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 cursor-pointer ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {saving ? (
-                <span className="flex items-center">
+                <>
                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   Saving...
-                </span>
-              ) : 'Save Changes'}
+                </>
+              ) : (
+                <>
+                  <Save size={18} className="mr-2" />
+                  Save Quiz
+                </>
+              )}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
-};
-
-export default EditQuiz;
+}

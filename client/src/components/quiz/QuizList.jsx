@@ -172,8 +172,8 @@ const QuizList = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {quizzes.map(quiz => (
-            <QuizCard key={quiz._id} quiz={quiz} />
-          ))}
+  <QuizCard key={quiz._id} quiz={quiz} questions={quiz.totalQuestions} />
+))}
         </div>
       )}
     </div>

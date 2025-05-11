@@ -15,7 +15,7 @@ exports.createQuiz = async (req, res) => {
       difficulty,
       timeLimit,
       passScore,
-      createdBy: req.userId
+      createdBy: req.user
     });
     
     const savedQuiz = await quiz.save();
@@ -154,12 +154,12 @@ exports.submitQuizAttempt = async (req, res) => {
     const { id: quizId } = req.params;
     const { answers } = req.body;
     
-    // Debug logs to help with troubleshooting
-    console.log('Quiz submission attempt:');
-    console.log('- Quiz ID:', quizId);
-    console.log('- User ID:', req.userId);
-    console.log('- Answers count:', answers?.length || 0);
-
+    console.log('Quiz submission received:', {
+      quizId,
+      userId: req.userId,
+      answersCount: answers?.length
+    });
+    
     // Validate required inputs
     if (!quizId) {
       return res.status(400).json({ message: 'Quiz ID is required' });
@@ -190,36 +190,45 @@ exports.submitQuizAttempt = async (req, res) => {
     let maxScore = 0;
     const processedAnswers = [];
 
+    // Process each question, including those without answers
     for (const question of questions) {
       const userAnswer = answers.find(a => a.questionId === question._id.toString());
       maxScore += question.points;
 
-      if (!userAnswer) continue;
-
-      const correctOptions = question.options.filter(o => o.isCorrect).map(o => o.text);
-      const selectedOption = question.options.find(o => o._id.toString() === userAnswer.selectedOptionId);
-
+      // Default values for unanswered questions
+      let selectedAnswer = '';
       let isCorrect = false;
-      if (selectedOption && correctOptions.includes(selectedOption.text)) {
-        score += question.points;
-        isCorrect = true;
+      let pointsEarned = 0;
+
+      // If user answered this question
+      if (userAnswer && userAnswer.selectedOptionId) {
+        const selectedOption = question.options.find(
+          o => o._id.toString() === userAnswer.selectedOptionId
+        );
+        
+        if (selectedOption) {
+          selectedAnswer = selectedOption.text;
+          isCorrect = selectedOption.isCorrect === true;
+          pointsEarned = isCorrect ? question.points : 0;
+          score += pointsEarned;
+        }
       }
 
       processedAnswers.push({
         questionId: question._id,
-        selectedAnswer: selectedOption?.text || '',
+        selectedAnswer,
         isCorrect,
-        pointsEarned: isCorrect ? question.points : 0
+        pointsEarned
       });
     }
 
-    // Create the attempt record - using correct field names from schema
-    const Attempt = require('../models/attempt.model');
+    // Create the attempt with correct field references
     const attempt = await Attempt.create({
-      user: req.userId,  // Match schema field name 'user'
-      quiz: quizId,      // Match schema field name 'quiz'
+      user: req.userId,  // Match schema field name
+      quiz: quizId,      // Match schema field name  
       score,
       maxScore,
+      startedAt: new Date(),
       completedAt: new Date(),
       answers: processedAnswers
     });
@@ -240,7 +249,7 @@ exports.submitQuizAttempt = async (req, res) => {
   } catch (error) {
     console.error('Submit quiz error:', error);
     
-    // Handle specific errors
+    // Log more detailed error information for debugging
     if (error.name === 'ValidationError') {
       console.error('Validation error details:', JSON.stringify(error.errors));
       return res.status(400).json({ 
@@ -266,36 +275,84 @@ exports.submitQuizAttempt = async (req, res) => {
 
 exports.getQuizAttemptById = async (req, res) => {
   try {
-    // Use Attempt model instead of Quiz model
-    const attempt = await Attempt.findById(req.params.id).populate('quiz user');
+    // Fetch the attempt with populated user and quiz fields
+    const attempt = await Attempt.findById(req.params.id)
+      .populate('quiz')
+      .populate('user');
     
-    console.log("attempt", attempt);
-
     if (!attempt) {
       return res.status(404).json({ message: 'Attempt not found' });
     }
     
-    const quizWithQuestions = {
-      ...attempt.quiz._doc,
-      questions: Question
+    // Fetch all questions for this quiz
+    const questions = await Question.find({ quizId: attempt.quiz._id });
+    
+    // Prepare response with all the data frontend needs
+    const responseData = {
+      attempt: {
+        ...attempt._doc,
+        // Ensure answers have complete information
+        answers: attempt.answers.map(answer => {
+          // Find matching question for this answer
+          const question = questions.find(q => 
+            q._id.toString() === answer.questionId.toString()
+          );
+          
+          return {
+            ...answer._doc,
+            question: question ? {
+              _id: question._id,
+              text: question.text,
+              options: question.options.map(opt => ({
+                _id: opt._id,
+                text: opt.text,
+                isCorrect: opt.isCorrect
+              }))
+            } : null
+          };
+        })
+      },
+      quiz: {
+        ...attempt.quiz._doc,
+        questions
+      }
     };
     
-    res.json({ attempt, quiz: quizWithQuestions });
-
+    res.json(responseData);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Get attempt error:', error);
+    res.status(500).json({ message: 'Server error fetching attempt details' });
   }
 };
 // Get all attempts for a user
 exports.getUserAttempts = async (req, res) => {
   try {
-    const attempts = await Attempt.find({ userId: req.userId })
-      .populate('quizId', 'title category difficulty').exec()
+    // Option 1: Rename the populated field to match frontend expectations
+    const attempts = await Attempt.find({ user: req.userId }) 
+      .populate('quizId', 'title category difficulty')  // Change 'quiz' to 'quizId' if that's your schema field
       .select('-answers')
       .sort({ createdAt: -1 });
     
     res.json({ attempts });
+
+    // Option 2 (Alternative): Keep the backend as is but transform data
+    /*
+    const attempts = await Attempt.find({ user: req.userId }) 
+      .populate('quiz', 'title category difficulty')
+      .select('-answers')
+      .sort({ createdAt: -1 });
+    
+    // Transform data to match frontend expectations
+    const transformedAttempts = attempts.map(attempt => {
+      const attemptObj = attempt.toObject();
+      // Rename quiz to quizId for frontend compatibility
+      attemptObj.quizId = attemptObj.quiz;
+      delete attemptObj.quiz;
+      return attemptObj;
+    });
+    
+    res.json({ attempts: transformedAttempts });
+    */
   } catch (error) {
     console.error('Get user attempts error:', error);
     res.status(500).json({ message: 'Server error fetching attempts' });
@@ -304,10 +361,19 @@ exports.getUserAttempts = async (req, res) => {
 
 exports.getQuizStatistics = async (req, res) => {
   try {
-    const quizId = req.params.id;
 
-    // ✅ Correct field: 'quiz', not 'quizId'
-    const attempts = await Attempt.find({ quiz: quizId });
+    if (!req.userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    const quizId = await Quiz.findById(req.params.id);
+    
+    // Check if quiz exists
+    if (!quizId) {
+      return res.status(404).json({ message: "Quiz not found" });
+    }
+
+    const attempts = await Attempt.find({ quiz: req.params.id });
 
     if (!attempts.length) {
       return res.json({
@@ -328,11 +394,12 @@ exports.getQuizStatistics = async (req, res) => {
     const passRate =
       (attempts.filter((a) => (a.score / a.maxScore) * 100 >= 40).length / totalAttempts) * 100;
 
-    const uniqueUsers = new Set(attempts.map((a) => a.userId.toString())).size;
+    const uniqueUsers = new Set(attempts.map((a) => a.user?.toString()).filter(Boolean)).size;
 
-    const quiz = await mongoose.model("Quiz").findById(quizId);
+    // Fetch questions separately since they're stored in their own collection
+    const questions = await Question.find({ quizId: req.params.id });
 
-    const questionStats = quiz.questions.map((q) => {
+    const questionStats = questions.map((q) => {
       const stats = {
         text: q.text,
         correctCount: 0,
@@ -341,12 +408,14 @@ exports.getQuizStatistics = async (req, res) => {
       };
 
       attempts.forEach((attempt) => {
-        const answer = attempt.answers.find(
-          (ans) => ans.questionId.toString() === q._id.toString()
-        );
-        if (answer) {
-          stats.totalAttempts++;
-          if (answer.isCorrect) stats.correctCount++;
+        if (attempt.answers) {
+          const answer = attempt.answers.find(
+            (ans) => ans.questionId && ans.questionId.toString() === q._id.toString()
+          );
+          if (answer) {
+            stats.totalAttempts++;
+            if (answer.isCorrect) stats.correctCount++;
+          }
         }
       });
 
@@ -372,17 +441,15 @@ exports.getQuizStatistics = async (req, res) => {
     res.status(500).json({ message: "Error calculating statistics", error: err.message });
   }
 };
-
 exports.getRecentAttemptsByQuizId = async (req, res) => {
   try {
     const quizId = req.params.id;
     const limit = parseInt(req.query.limit) || 10;
 
-    const attempts = await Attempt.find({ quizId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .populate('userId', 'name email');
-
+    const attempts = await Attempt.find({ quiz: quizId }) 
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .populate('user', 'name email'); 
     const formattedAttempts = attempts.map(attempt => {
       const percentageScore = (attempt.score / attempt.maxScore) * 100;
 
@@ -396,8 +463,8 @@ exports.getRecentAttemptsByQuizId = async (req, res) => {
         score: Math.round(percentageScore),
         timeTaken,
         createdAt: attempt.createdAt,
-        user: attempt.userId
-          ? { name: attempt.userId.name, email: attempt.userId.email }
+        user: attempt.user
+          ? { name: attempt.user.name, email: attempt.user.email }
           : null,
       };
     });

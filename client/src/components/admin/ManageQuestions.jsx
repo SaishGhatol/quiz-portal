@@ -27,7 +27,7 @@ const ManageQuestions = () => {
     try {
       setLoading(true);
       
-      // Fetch quiz details (if you have a separate endpoint for this)
+      // Fetch quiz details
       const quizResponse = await api.get(`/quizzes/${id}`);
       const quiz = quizResponse.data;
       
@@ -38,9 +38,7 @@ const ManageQuestions = () => {
       // Transform questions to match component's expected format if necessary
       const formattedQuestions = questions.map(q => ({
         _id: q._id,
-        text: q.text,
-        // Transform options based on your backend structure
-        // If your backend uses { text: string, isCorrect: boolean } format:
+        text: q.text || '',
         options: q.options.map(opt => opt.text || opt),
         correctOption: q.options.findIndex(opt => opt.isCorrect) !== -1 ? 
                        q.options.findIndex(opt => opt.isCorrect) : 
@@ -75,105 +73,108 @@ const ManageQuestions = () => {
     }
   };
   
-  // Updated handleSubmit function
-// Updated handleSubmit function with better error handling and debugging
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  // Validate form
-  if (!currentQuestion.text.trim()) {
-    toast.error('Question text is required');
-    return;
-  }
-  
-  if (currentQuestion.options.some(option => !option.trim())) {
-    toast.error('All options must be filled out');
-    return;
-  }
-  
-  // Transform the question to match your backend's expected format
-  const questionData = {
-    text: currentQuestion.text,
-    // Transform to match backend expectations
-    options: currentQuestion.options.map((option, index) => ({
-      text: option,
-      isCorrect: index === currentQuestion.correctOption
-    })),
-    points: currentQuestion.points || 1,
-    type: 'multiple', // Adjust if you have different question types
-    quizId: id // Explicitly include the quiz ID
-  };
-  
-  console.log('Submitting question data:', questionData);
-  
-  try {
-    if (editing && editIndex >= 0 && editIndex < questions.length) {
-      // Update existing question
-      const questionId = questions[editIndex]?._id;
-      if (!questionId) {
-        toast.error('Question ID is missing. Cannot update.');
-        return;
-      }
-      
-      console.log(`Updating question ${questionId} for quiz ${id}`);
-      const response = await api.put(`/quizzes/${id}/questions/${questionId}`, questionData);
-      console.log('Update response:', response.data);
-      
-      const updatedQuestions = [...questions];
-      updatedQuestions[editIndex] = { 
-        ...currentQuestion, 
-        _id: questionId 
-      };
-      setQuestions(updatedQuestions);
-      toast.success('Question updated successfully');
-    } else {
-      // Add new question
-      console.log(`Adding new question to quiz ${id}`);
-      // Try alternative endpoint format if your API is structured differently
-      const response = await api.post(`/quizzes/${id}/questions`, questionData);
-      console.log('Create response:', response.data);
-      
-      // Assuming the response contains the created question with _id
-      const newQuestion = {
-        _id: response.data.question?._id || response.data._id,
-        text: currentQuestion.text,
-        options: [...currentQuestion.options],
-        correctOption: currentQuestion.correctOption,
-        points: currentQuestion.points
-      };
-      setQuestions([...questions, newQuestion]);
-      toast.success('Question added successfully');
-    }
-    resetForm();
-  } catch (error) {
-    console.error('Error saving question:', error);
+  // Modified handleSubmit function with totalQuestions update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     
-    // Enhanced error handling with more details
-    if (error.response) {
-      console.error('Response error details:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      });
-      
-      const errorDetail = error.response.data?.message || error.response.data?.error || error.response.statusText;
-      toast.error(`Failed to save: ${errorDetail || 'Server error'}`);
-      
-      // Provide more specific guidance based on common error codes
-      if (error.response.status === 404) {
-        toast.error('API endpoint not found. Check quiz ID and API routes.');
-      } else if (error.response.status === 401 || error.response.status === 403) {
-        toast.error('Authentication error. You may need to log in again.');
-      } else if (error.response.status === 400) {
-        toast.error('Invalid question format. Check required fields.');
-      }
-    } else if (error.request) {
-      toast.error('Network issue. Please check your connection.');
-    } else {
-      toast.error(`Error: ${error.message}`);
+    // Validate form
+    if (!currentQuestion.text.trim()) {
+      toast.error('Question text is required');
+      return;
     }
-  }
-};
+    
+    if (currentQuestion.options.some(option => !option.trim())) {
+      toast.error('All options must be filled out');
+      return;
+    }
+    
+    // Transform the question to match your backend's expected format
+    const questionData = {
+      text: currentQuestion.text,
+      options: currentQuestion.options.map((option, index) => ({
+        text: option,
+        isCorrect: index === currentQuestion.correctOption
+      })),
+      points: currentQuestion.points || 1,
+      type: 'multiple', // Adjust if you have different question types
+      quizId: id
+    };
+    
+    console.log('Submitting question data:', questionData);
+    
+    try {
+      let response;
+      
+      if (editing && editIndex >= 0 && editIndex < questions.length) {
+        // Update existing question
+        const questionId = questions[editIndex]?._id;
+        if (!questionId) {
+          toast.error('Question ID is missing. Cannot update.');
+          return;
+        }
+        
+        console.log(`Updating question ${questionId} for quiz ${id}`);
+        response = await api.put(`/quizzes/${id}/questions/${questionId}`, questionData);
+        console.log('Update response:', response.data);
+        
+        const updatedQuestions = [...questions];
+        updatedQuestions[editIndex] = { 
+          ...currentQuestion, 
+          _id: questionId 
+        };
+        setQuestions(updatedQuestions);
+        toast.success('Question updated successfully');
+      } else {
+        // Add new question
+        console.log(`Adding new question to quiz ${id}`);
+        response = await api.post(`/quizzes/${id}/questions`, questionData);
+        console.log('Create response:', response.data);
+        
+        // Assuming the response contains the created question with _id
+        const newQuestion = {
+          _id: response.data.question?._id || response.data._id,
+          text: currentQuestion.text,
+          options: [...currentQuestion.options],
+          correctOption: currentQuestion.correctOption,
+          points: currentQuestion.points
+        };
+        setQuestions([...questions, newQuestion]);
+        toast.success('Question added successfully');
+      }
+      
+      // Fetch the updated quiz with correct totalQuestions count
+      const updatedQuizResponse = await api.get(`/quizzes/${id}`);
+      setQuiz(updatedQuizResponse.data);
+      
+      resetForm();
+    } catch (error) {
+      console.error('Error saving question:', error);
+      
+      if (error.response) {
+        console.error('Response error details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+        
+        const errorDetail = error.response.data?.message || error.response.data?.error || error.response.statusText;
+        toast.error(`Failed to save: ${errorDetail || 'Server error'}`);
+        
+        if (error.response.status === 404) {
+          toast.error('API endpoint not found. Check quiz ID and API routes.');
+        } else if (error.response.status === 401 || error.response.status === 403) {
+          toast.error('Authentication error. You may need to log in again.');
+        } else if (error.response.status === 400) {
+          toast.error('Invalid question format. Check required fields.');
+        }
+      } else if (error.request) {
+        toast.error('Network issue. Please check your connection.');
+      } else {
+        toast.error(`Error: ${error.message}`);
+      }
+    }
+  };
+
   const handleQuestionChange = (e) => {
     setCurrentQuestion({
       ...currentQuestion,
@@ -229,6 +230,7 @@ const handleSubmit = async (e) => {
     }
   };
 
+  // Modified deleteQuestion function to update totalQuestions
   const deleteQuestion = async (questionId, index) => {
     if (!questionId) {
       toast.error('Question ID is missing. Cannot delete.');
@@ -241,6 +243,11 @@ const handleSubmit = async (e) => {
       await api.delete(`/quizzes/${id}/questions/${questionId}`);
       const updatedQuestions = questions.filter((_, i) => i !== index);
       setQuestions(updatedQuestions);
+      
+      // Fetch updated quiz with correct totalQuestions count
+      const updatedQuizResponse = await api.get(`/quizzes/${id}`);
+      setQuiz(updatedQuizResponse.data);
+      
       toast.success('Question deleted successfully');
       
       if (editing && editIndex === index) {
@@ -249,7 +256,6 @@ const handleSubmit = async (e) => {
     } catch (error) {
       console.error('Error deleting question:', error);
       
-      // Enhanced error handling
       if (error.response) {
         toast.error(`Failed to delete: ${error.response?.data?.message || error.response.statusText || 'Server error'}`);
       } else {
@@ -266,12 +272,11 @@ const handleSubmit = async (e) => {
     
     try {
       await api.put(`/quizzes/${id}/questions/${questionId}/reorder`, { direction });
-      await fetchQuizWithQuestions(); // Refresh questions with await to ensure completion
+      await fetchQuizWithQuestions(); // Refresh questions with updated order
       toast.success('Question reordered successfully');
     } catch (error) {
       console.error('Error reordering question:', error);
       
-      // Enhanced error handling
       if (error.response) {
         toast.error(`Failed to reorder: ${error.response?.data?.message || error.response.statusText || 'Server error'}`);
       } else {
@@ -437,7 +442,7 @@ const handleSubmit = async (e) => {
               )}
               <button
                 type="submit"
-                className={`px-5 py-2 rounded-lg text-white ${
+                className={`px-5 py-2 rounded-lg text-white cursor-pointer ${
                   editing
                     ? 'bg-green-600 hover:bg-green-700'
                     : 'bg-blue-600 hover:bg-blue-700'
@@ -456,21 +461,21 @@ const handleSubmit = async (e) => {
               <div className="flex items-center">
                 <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
                   <span className="text-indigo-600 font-bold">
-                    {questions ? questions.length : 0}
+                    {questions.length}
                   </span>
                 </div>
                 <h2 className="text-xl font-bold text-gray-800">
                   Question Bank
                 </h2>
               </div>
-              {questions && questions.length > 0 && (
+              {questions.length > 0 && (
                 <span className="text-sm text-gray-500">
                   Total Points: {questions.reduce((sum, q) => sum + (q.points || 1), 0)}
                 </span>
               )}
             </div>
             
-            {!questions || questions.length === 0 ? (
+            {questions.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
                 <div className="text-4xl mb-3 text-gray-400">📝</div>
                 <p className="text-gray-500 mb-2">No questions added yet</p>
@@ -578,7 +583,7 @@ const handleSubmit = async (e) => {
             )}
           </div>
           
-          {questions && questions.length > 0 && (
+          {questions.length > 0 && (
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-blue-800 text-sm">
               <p className="font-medium">Quiz Summary</p>
               <ul className="mt-2 pl-5 list-disc">

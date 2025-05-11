@@ -23,8 +23,7 @@ const UserAttempts = () => {
         params.append('sortOrder', filters.sortOrder);
         
         // Make the API call with the query parameters
-        const response = await api.get(`/attempts?${params}`);
-
+        const response = await api.get(`attempts?${params}`);
         
         // Set attempts from the response
         setAttempts(response.data.attempts || []);

@@ -1,4 +1,3 @@
-// server/routes/admin.routes.js
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
@@ -12,7 +11,7 @@ router.get('/dashboard/stats', adminController.getDashboardStats);
 
 // Quiz management routes
 router.get('/quizzes', adminController.getAllQuizzes);
-
+router.post('/', adminController.createQuiz);  
 router.get('/quizzes/recent', adminController.getRecentQuizzes);
 router.get('/quizzes/:id', adminController.getQuizById);
 router.get('/quizzes/:id/attempts', adminController.getRecentAttempts);
@@ -21,11 +20,6 @@ router.get('/quizzes/:id/attempts', adminController.getRecentAttempts);
 router.get('/users', adminController.getAllUsers);
 router.get('/users/:id', adminController.getUserById);
 router.put('/users/:id', adminController.updateUser);
-
-// Attempts management
-// Attempts management
-router.get('/attempts', adminController.getAllAttempts);
-router.get('/attempts/:id', adminController.getAttemptById);
 
 // Question management routes
 // For getting all questions of a specific quiz

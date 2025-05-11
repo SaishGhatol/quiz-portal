@@ -6,10 +6,12 @@ const { authenticateJWT } = require('../middleware/auth.middleware');
 // Attempt routes
 router.post('/start', authenticateJWT, attemptController.startAttempt);
 router.post('/answer', authenticateJWT, attemptController.submitAnswer);
-router.get('/my-attempts', authenticateJWT, attemptController.getUserAttempts);
+router.get('/user', authenticateJWT, attemptController.getUserAttempts);
+router.get('/:id', attemptController.getAttemptById);
 
 router.put('/:attemptId/complete', authenticateJWT, attemptController.completeAttempt);
-router.get('/:id', authenticateJWT,attemptController.getAttemptDetails);
+
 router.get('/stats/:quizId', authenticateJWT, attemptController.getQuizStats);
+router.get('/attempts/:id', authenticateJWT, attemptController.getAttemptDetails);
 
 module.exports = router;

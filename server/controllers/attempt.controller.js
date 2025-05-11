@@ -317,10 +317,15 @@ exports.getAttemptDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Validate ObjectId format first
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid attempt ID format' });
+    }
+
     const attempt = await Attempt.findById(id)
-      .populate('quizId', 'title category difficulty')
+      .populate('quiz', 'title category difficulty')
       .populate({
-        path: 'userId',
+        path: 'user',
         select: 'name email',
         strictPopulate: false,
       });
@@ -329,10 +334,10 @@ exports.getAttemptDetails = async (req, res) => {
       return res.status(404).json({ message: 'Attempt not found' });
     }
 
-    // Check if user is allowed to view this attempt
+    // Authorization check - compare ObjectIds directly
     if (
       req.userRole !== 'admin' &&
-      attempt.userId._id.toString() !== req.userId
+      !attempt.user._id.equals(req.userId)
     ) {
       return res.status(403).json({ message: 'Not authorized to view this attempt' });
     }
@@ -341,5 +346,38 @@ exports.getAttemptDetails = async (req, res) => {
   } catch (error) {
     console.error('Get attempt details error:', error);
     res.status(500).json({ message: 'Server error fetching attempt details' });
+  }
+};
+
+exports.getAttemptById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new BadRequestError('Invalid attempt ID');
+    }
+
+    const attempt = await Attempt.findById(id)
+      .populate('quiz', 'title description category difficulty timeLimit passScore')
+      .populate('answers.questionId', 'question options correctAnswer explanation');
+
+    if (!attempt) {
+      throw new NotFoundError('Attempt not found');
+    }
+
+    // Check if the attempt belongs to the current user or if the user is an admin
+    if (attempt.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to view this attempt'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      attempt
+    });
+  } catch (error) {
+    next(error);
   }
 };

@@ -10,6 +10,7 @@ const QuizResults = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [timeRequired, setTimeRequired] = useState(null);
   
   useEffect(() => {
     const fetchAttemptDetails = async () => {
@@ -17,34 +18,24 @@ const QuizResults = () => {
       try {
         const response = await api.get(`/quizzes/attempts/${attemptId}`);
         
-        // Log raw response to debug structure
-        console.log("Raw API Response:", response.data);
+        // Set attempt data
+        setAttempt(response.data.attempt);
         
-        // Extract and set attempt data
-        const attemptData = response.data.attempt || {};
-        setAttempt(attemptData);
+        // Set quiz data
+        setQuiz(response.data.quiz);
         
-        // Extract and set quiz data
-        const quizData = response.data.quiz || {};
-        setQuiz(quizData);
+        // Set questions data
+        if (response.data.quiz && response.data.quiz.questions) {
+          setQuestions(response.data.quiz.questions);
+        }
         
-        // Extract questions from the response
-        // First check if quiz has questions property in the response
-        if (quizData && quizData.questions && Array.isArray(quizData.questions)) {
-          setQuestions(quizData.questions);
-          console.log("Questions from quiz:", quizData.questions);
-        } 
-        // If questions aren't found, try to make a separate API call to get them
-        else if (quizData && quizData._id) {
-          try {
-            const quizDetailsResponse = await api.get(`/quizzes/${quizData._id}`);
-            if (quizDetailsResponse.data && quizDetailsResponse.data.questions) {
-              setQuestions(quizDetailsResponse.data.questions);
-              console.log("Questions from separate API call:", quizDetailsResponse.data.questions);
-            }
-          } catch (quizError) {
-            console.error('Error fetching quiz details:', quizError);
-          }
+        // Calculate time required to complete the quiz
+        if (response.data.attempt && response.data.attempt.startedAt && response.data.attempt.completedAt) {
+          const startTime = new Date(response.data.attempt.startedAt);
+          const endTime = new Date(response.data.attempt.completedAt);
+          const timeDiffMs = endTime - startTime;
+          const timeDiffMin = Math.round(timeDiffMs / (1000 * 60));
+          setTimeRequired(timeDiffMin);
         }
         
         setError(null);
@@ -55,7 +46,7 @@ const QuizResults = () => {
         setLoading(false);
       }
     };
-
+    
     fetchAttemptDetails();
   }, [attemptId]);
   
@@ -96,31 +87,33 @@ const QuizResults = () => {
     return Math.round((attempt.score / attempt.maxScore) * 100);
   };
 
-  // Helper function to find the selected option text
+  // Format time in minutes
+  const formatTimeInMinutes = (minutes) => {
+    if (minutes === null || minutes === undefined) return 'N/A';
+    if (minutes === 0) return 'Less than a minute';
+    return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+  };
+
   // Updated findSelectedOptionText function
-const findSelectedOptionText = (questionId, questionOptions) => {
-  if (!attempt || !attempt.answers) return 'No answer';
-  console.log(attempt);
-  console.log(attempt.answers)
-  
-  const answer = attempt.answers.find(a => a.questionId === questionId);
-  if (!answer) return 'No answer';
-  
-  // If there's no selectedOptionId but the answer is correct and has points,
-  // it means the answer was provided but we don't have the text
-  if (!answer.selectedAnswer && answer.isCorrect) {
-    return 'Correct answer (12)';
-  }
-  
-  if (!answer.selectedAnswer) return 'No answer';
-  
-  if (!Array.isArray(questionOptions) || questionOptions.length === 0) {
-    return `(${answer.selectedAnswer})`;
-  }
-  
-  const selectedOption = questionOptions.find(opt => opt._id === answer.selectedAnswer  );
-  return selectedOption ? selectedOption.text : `${answer.selectedAnswer}`;
-};
+  const findSelectedOptionText = (questionId, questionOptions) => {
+    if (!attempt || !attempt.answers) return 'No answer';
+    
+    const answer = attempt.answers.find(a => a.questionId === questionId);
+    if (!answer) return 'No answer';
+      // it means the answer was provided but we don't have the text
+    if (!answer.selectedAnswer && answer.isCorrect) {
+      return 'Correct answer (12)';
+    }
+    
+    if (!answer.selectedAnswer) return 'No answer';
+    
+    if (!Array.isArray(questionOptions) || questionOptions.length === 0) {
+      return `(${answer.selectedAnswer})`;
+    }
+    
+    const selectedOption = questionOptions.find(opt => opt._id === answer.selectedAnswer);
+    return selectedOption ? selectedOption.text : `${answer.selectedAnswer}`;
+  };
   
   // Handle JSX attributes properly
   const getPath = (showState) => {
@@ -224,6 +217,15 @@ const findSelectedOptionText = (questionId, questionOptions) => {
                   <p className="text-gray-600">Time limit: {quiz.timeLimit} minutes</p>
                 </div>
               )}
+
+              <div className="flex items-center">
+                <div className="mr-3 text-gray-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="text-gray-600">Time required: {formatTimeInMinutes(timeRequired)}</p>
+              </div>
             </div>
             
             <div className="flex flex-col items-center justify-center bg-gray-50 rounded-lg p-4">
@@ -449,17 +451,6 @@ const findSelectedOptionText = (questionId, questionOptions) => {
             </Link>
           )}
           
-          {isPassed && (
-            <Link 
-              to="/certificates" 
-              className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors font-medium"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              View Certificate
-            </Link>
-          )}
         </div>
       </div>
     </div>
