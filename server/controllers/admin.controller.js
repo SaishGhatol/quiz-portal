@@ -62,134 +62,221 @@ exports.createQuiz = async (req, res) => {
     });
   }
 };
+
 exports.getAllUsers = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search = '', sortBy = 'createdAt', order = 'desc' } = req.query;
-
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      sortField = 'name',
+      sortDirection = 'asc',
+      role,
+      status
+    } = req.query;
+    
     // Create query object
     const query = {};
+    
+    // Add search functionality
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } }
       ];
     }
-
+    
+    // Add role filter if provided
+    if (role && role !== 'all') {
+      query.role = role;
+    }
+    
+    // Add status filter if provided
+    if (status && status !== 'all') {
+      query.isActive = status === 'active';
+    }
+    
     // Set sort order
     const sort = {};
-    sort[sortBy] = order === 'asc' ? 1 : -1;
-
+    sort[sortField] = sortDirection === 'asc' ? 1 : -1;
+    
     // Execute query with pagination
     const users = await User.find(query)
       .select('-password')
       .sort(sort)
       .limit(parseInt(limit))
-      .skip((page - 1) * limit)
+      .skip((page - 1) * parseInt(limit))
       .exec();
-
+    
     // Get total count for pagination
     const total = await User.countDocuments(query);
-
+    
     // For each user, get their quiz attempt count
     const enhancedUsers = await Promise.all(users.map(async (user) => {
       const attemptCount = await Attempt.countDocuments({ user: user._id });
+      const lastAttempt = await Attempt.findOne({ user: user._id })
+        .sort({ createdAt: -1 })
+        .select('createdAt');
+      
       return {
         ...user._doc,
-        attemptCount
+        attemptCount,
+        lastActivity: lastAttempt ? lastAttempt.createdAt : null
       };
     }));
-
+    
     res.status(200).json({
       users: enhancedUsers,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
+      totalPages: Math.ceil(total / parseInt(limit)),
+      currentPage: parseInt(page),
+      totalUsers: total
     });
   } catch (error) {
     next(error);
   }
 };
+
 exports.getUserById = async (req, res, next) => {
   try {
     const userId = req.params.id;
     
-    // Check if userId is a valid MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: 'Invalid user ID format' });
     }
-
+    
     const user = await User.findById(userId).select('-password');
-
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
+    
     // Get user's attempts
     const attempts = await Attempt.find({ user: userId })
-      .populate('quiz', 'title')
-      .sort({ completedAt: -1 })
-      .limit(10);
-
+      .sort({ createdAt: -1 })
+      .limit(5);
+      
+    const attemptCount = await Attempt.countDocuments({ user: userId });
+    
     res.status(200).json({
       user,
-      attempts
+      recentAttempts: attempts,
+      attemptCount
     });
   } catch (error) {
     next(error);
   }
 };
+
+exports.createUser = async (req, res, next) => {
+  try {
+    const { name, email, password, role } = req.body;
+    
+    // Check if user with email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User with this email already exists' });
+    }
+    
+    // Create new user
+    const user = new User({
+      name,
+      email,
+      password, // Note: Password should be hashed in the User model pre-save hook
+      role: role || 'user',
+      isActive: true,
+      createdAt: new Date()
+    });
+    
+    await user.save();
+    
+    // Return the user without password
+    const newUser = user.toObject();
+    delete newUser.password;
+    
+    res.status(201).json({
+      message: 'User created successfully',
+      user: newUser
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.updateUser = async (req, res, next) => {
   try {
+    const userId = req.params.id;
     const { name, email, role, isActive } = req.body;
-
-    const user = await User.findById(req.params.id);
+    
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+    
+    // Find user first to check if exists
+    const user = await User.findById(userId);
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
+    
+    // Check if email is being changed and if it's unique
+    if (email && email !== user.email) {
+      const emailExists = await User.findOne({ email, _id: { $ne: userId } });
+      if (emailExists) {
+        return res.status(409).json({ message: 'Email is already in use' });
+      }
+    }
+    
     // Update fields
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (role) user.role = role;
-    if (isActive !== undefined) user.isActive = isActive;
-
-    await user.save();
-
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { 
+        name: name || user.name,
+        email: email || user.email,
+        role: role || user.role,
+        isActive: isActive !== undefined ? isActive : user.isActive,
+        updatedAt: new Date()
+      },
+      { new: true, runValidators: true }
+    ).select('-password');
+    
     res.status(200).json({
       message: 'User updated successfully',
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt
-      }
+      user: updatedUser
     });
   } catch (error) {
     next(error);
   }
 };
+
 exports.deleteUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id);
-
+    const userId = req.params.id;
+    
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+    
+    // Find user to confirm they exist before deleting
+    const user = await User.findById(userId);
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    // For safety, prevent deleting the last admin
-    if (user.role === 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin' });
-      if (adminCount <= 1) {
-        return res.status(400).json({ message: 'Cannot delete the last admin user' });
-      }
+    
+    // Check for admin trying to delete themselves
+    if (user.role === 'admin' && req.user && req.user.id === userId) {
+      return res.status(403).json({ message: 'Admins cannot delete their own accounts' });
     }
-
-    await User.deleteOne({ _id: req.params.id });
-
-    res.status(200).json({ message: 'User deleted successfully' });
+    
+    // Delete user's attempts first to maintain referential integrity
+    await Attempt.deleteMany({ user: userId });
+    
+    // Delete the user
+    await User.findByIdAndDelete(userId);
+    
+    res.status(200).json({
+      message: 'User and associated data deleted successfully'
+    });
   } catch (error) {
     next(error);
   }
@@ -310,7 +397,7 @@ exports.getQuizById = async (req, res, next) => {
 exports.getRecentAttempts = async (req, res) => {
   try {
     const quizId = req.params.id;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit =  10;
 
     // Verify the quiz ID is valid
     if (!quizId) {

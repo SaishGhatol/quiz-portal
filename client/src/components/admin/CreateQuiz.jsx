@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate, Link ,useParams} from 'react-router-dom';
-import { Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useParams } from 'react-router-dom';
+import { Save, ArrowLeft } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'react-toastify';
 
 const CreateQuiz = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -16,14 +17,14 @@ const CreateQuiz = () => {
     timeLimit: 0,
     isPublished: false,
   });
+
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: type === 'checkbox' ? checked : 
-              type === 'number' ? parseInt(value, 10) || 0 : value
+      [name]: type === 'checkbox' ? checked : type === 'number' ? parseInt(value, 10) || 0 : value,
     });
   };
 
@@ -31,209 +32,187 @@ const CreateQuiz = () => {
     e.preventDefault();
     try {
       setLoading(true);
-      
-      // Form data validation
-      if (!formData.title || !formData.description || !formData.category || 
-          !formData.difficulty || formData.passScore === '') {
+
+      // Validate required fields
+      if (!formData.title || !formData.description || !formData.category || !formData.difficulty || formData.passScore === '') {
         toast.error('Please fill all required fields');
         setLoading(false);
         return;
       }
-      
-      // Ensure numeric fields are numbers
+
       const formattedData = {
         ...formData,
         timeLimit: parseInt(formData.timeLimit, 10) || 0,
-        passScore: parseInt(formData.passScore, 10) || 0
+        passScore: parseInt(formData.passScore, 10) || 0,
       };
-      
-      console.log('Submitting quiz data:', formattedData);
-      
-      // Make API request
+
       const response = await api.post('/admin/quizzes/create', formattedData);
-      
       toast.success('Quiz created successfully');
       navigate(`/admin/quizzes/${response.data.quiz._id}/questions`);
     } catch (error) {
-      console.error('Error creating quiz:', error);
-      
-      // Better error handling
-      const errorMessage = error.response?.data?.details || 
-                           error.response?.data?.message || 
-                           'Failed to create quiz';
+      const errorMessage = error.response?.data?.details || error.response?.data?.message || 'Failed to create quiz';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // Optional: Ctrl + Enter to submit
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        handleSubmit(e);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [formData]);
+
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-10 px-4 py-3 bg-white shadow-md rounded-2xl">
-        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
-          Create New Quiz
-        </h1>
-        <Link 
-          to="/admin/quizzes" 
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-600 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition duration-300 shadow hover:shadow-lg"
+    <div className="w-full max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:py-10 lg:px-8">
+      {/* Header - Responsive adjustments */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-10 px-4 sm:px-6 py-4 bg-white shadow-md rounded-xl sm:rounded-2xl">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 sm:mb-0">Create New Quiz</h1>
+        <Link
+          to="/admin/quizzes"
+          className="inline-flex items-center justify-center gap-1 sm:gap-2 px-3 py-2 sm:px-4 bg-gray-700 text-white hover:bg-gray-900 rounded-lg text-sm transition w-full sm:w-auto"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Quizzes
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Quizzes</span>
         </Link>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-100">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Form Card - Responsive padding and spacing */}
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 md:p-8 border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6">
             {/* Title */}
-            <div className="col-span-2">
-              <label htmlFor="title" className="block text-gray-700 font-medium mb-2">Quiz Title</label>
+            <div>
+              <label htmlFor="title" className="block text-gray-700 font-medium mb-1 sm:mb-2">Quiz Title</label>
               <input
                 type="text"
                 id="title"
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150"
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 placeholder="Enter quiz title"
                 required
               />
             </div>
 
             {/* Description */}
-            <div className="col-span-2">
-              <label htmlFor="description" className="block text-gray-700 font-medium mb-2">Description</label>
+            <div>
+              <label htmlFor="description" className="block text-gray-700 font-medium mb-1 sm:mb-2">Description</label>
               <textarea
                 id="description"
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 h-32"
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 h-24 sm:h-28 resize-none"
                 placeholder="Describe what this quiz is about"
                 required
               />
             </div>
 
-            {/* Category */}
-            <div>
-              <label htmlFor="category" className="block text-gray-700 font-medium mb-2">Category</label>
-              <input
-                type="text"
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150"
-                placeholder="e.g. Mathematics, Science, History"
-                required
-              />
-            </div>
-
-            {/* Difficulty */}
-            <div>
-              <label htmlFor="difficulty" className="block text-gray-700 font-medium mb-2">Difficulty Level</label>
-              <select
-                id="difficulty"
-                name="difficulty"
-                value={formData.difficulty}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-white"
-                required
-              >
-                <option value="">Select difficulty</option>
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-
-            {/* Pass Score */}
-            <div>
-              <label htmlFor="passScore" className="block text-gray-700 font-medium mb-2">
-                Pass Score (%)
-                <span className="ml-1 text-sm text-gray-500">Required to pass this quiz</span>
-              </label>
-              <input
-                type="number"
-                id="passScore"
-                name="passScore"
-                value={formData.passScore}
-                onChange={handleChange}
-                min="0"
-                max="100"
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150"
-                required
-              />
-            </div>
-
-            {/* Time Limit */}
-            <div>
-              <label htmlFor="timeLimit" className="block text-gray-700 font-medium mb-2">
-                Time Limit (minutes)
-                <span className="ml-1 text-sm text-gray-500">Enter 0 for no time limit</span>
-              </label>
-              <input
-                type="number"
-                id="timeLimit"
-                name="timeLimit"
-                value={formData.timeLimit}
-                onChange={handleChange}
-                min="0"
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150"
-              />
-            </div>
-          </div>
-
-          {/* Published Status */}
-          <div className="pt-4 border-t border-gray-200">
-            <label className="flex items-center cursor-pointer">
-              <div className="relative">
+            {/* Two-column layout for medium screens and up */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {/* Category */}
+              <div>
+                <label htmlFor="category" className="block text-gray-700 font-medium mb-1 sm:mb-2">Category</label>
                 <input
-                  type="checkbox"
-                  id="isPublished"
-                  name="isPublished"
-                  checked={formData.isPublished}
+                  type="text"
+                  id="category"
+                  name="category"
+                  value={formData.category}
                   onChange={handleChange}
-                  className="sr-only"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  placeholder="e.g. Mathematics, Science"
+                  required
                 />
-                <div className={`block w-14 h-8 rounded-full transition-colors duration-200 ease-in-out ${formData.isPublished ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform duration-200 ease-in-out ${formData.isPublished ? 'transform translate-x-6' : ''}`}></div>
               </div>
-              <div className="ml-3 text-gray-700 font-medium">
-                {formData.isPublished ? 'Published' : 'Draft'}
-                <p className="text-sm text-gray-500 font-normal">
-                  {formData.isPublished ? 'Quiz will be immediately available to users' : 'Quiz will be saved as draft'}
-                </p>
+
+              {/* Difficulty */}
+              <div>
+                <label htmlFor="difficulty" className="block text-gray-700 font-medium mb-1 sm:mb-2">Difficulty</label>
+                <select
+                  id="difficulty"
+                  name="difficulty"
+                  value={formData.difficulty}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 bg-white"
+                  required
+                >
+                  <option value="">Select</option>
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
               </div>
-            </label>
+
+              {/* Pass Score */}
+              <div>
+                <label htmlFor="passScore" className="block text-gray-700 font-medium mb-1 sm:mb-2">
+                  Pass Score (%)
+                  <span className="block text-xs italic text-gray-500 mt-1">Minimum score to pass</span>
+                </label>
+                <input
+                  type="number"
+                  id="passScore"
+                  name="passScore"
+                  value={formData.passScore}
+                  onChange={handleChange}
+                  min="0"
+                  max="100"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  required
+                />
+              </div>
+
+              {/* Time Limit */}
+              <div>
+                <label htmlFor="timeLimit" className="block text-gray-700 font-medium mb-1 sm:mb-2">
+                  Time Limit (min)
+                  <span className="block text-xs italic text-gray-500 mt-1">0 = No time limit</span>
+                </label>
+                <input
+                  type="number"
+                  id="timeLimit"
+                  name="timeLimit"
+                  value={formData.timeLimit}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+          {/* Buttons - Responsive adjustments */}
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-gray-200 mt-4 sm:mt-6">
             <button
               type="button"
               onClick={() => navigate('/admin/quizzes')}
-              className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 transition duration-150 cursor-pointer"
+              className="px-4 py-2 sm:px-6 sm:py-3 border border-gray-300 bg-white text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition w-full sm:w-auto"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className={`inline-flex items-center px-6 py-3 bg-blue-600 rounded-lg text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 cursor-pointer ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`inline-flex items-center justify-center px-4 py-2 sm:px-6 sm:py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition w-full sm:w-auto ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   Creating...
                 </>
               ) : (
                 <>
-                  <Save size={18} className="mr-2" />
+                  <Save className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
                   Create Quiz
                 </>
               )}

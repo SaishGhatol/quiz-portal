@@ -233,7 +233,7 @@ exports.submitAnswer = async (req, res) => {
 exports.completeAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const { timeTaken } = req.body; // Optional time taken in seconds
+    const { timeTaken } = req.body; 
     
     // Validate ObjectId format
     if (!mongoose.Types.ObjectId.isValid(attemptId)) {
@@ -315,51 +315,54 @@ exports.completeAttempt = async (req, res) => {
  */
 exports.getUserAttempts = async (req, res) => {
   try {
-    const { category, quiz, status, sortBy = 'startedAt', sortOrder = 'desc' } = req.query;
-    
-    // Build query
+    const { 
+      category, 
+      quiz, 
+      status, 
+      sortBy = 'startedAt', 
+      sortOrder = 'desc' 
+    } = req.query;
+
+    // Build base query
     const query = { user: req.user };
-    
-    // Add quiz filter if provided
+
+    // Validate and add quiz filter
     if (quiz) {
       if (!mongoose.Types.ObjectId.isValid(quiz)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid quiz ID format' 
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid quiz ID format'
         });
       }
       query.quiz = quiz;
     }
-    
-    // Add category filter if provided
+
+    // Add category filter
     if (category) {
-      // Find quizzes in the category first
       const categoryQuizzes = await Quiz.find({ category });
+      
       if (categoryQuizzes.length === 0) {
-        return res.json({ 
+        return res.json({
           success: true,
-          attempts: [] 
+          attempts: []
         });
       }
+      
       const quizIds = categoryQuizzes.map(q => q._id);
       query.quiz = { $in: quizIds };
     }
-    
-    // Add status filter if provided
+
+    // Add status filter
     if (status === 'completed') {
       query.completedAt = { $ne: null };
     } else if (status === 'inProgress') {
       query.completedAt = null;
     }
-    
-    // Determine sort options
-    const sort = {};
-    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
-    
-    // Handle special case of nested sorting (like quiz.title)
+
+    // Handle nested sorting (e.g., quiz.title)
     if (sortBy.includes('.')) {
       const [parentField, childField] = sortBy.split('.');
-      
+
       const lookupStage = {
         $lookup: {
           from: parentField === 'quiz' ? 'quizzes' : `${parentField}s`,
@@ -368,29 +371,29 @@ exports.getUserAttempts = async (req, res) => {
           as: `${parentField}Data`
         }
       };
-      
+
       const unwindStage = {
         $unwind: {
           path: `$${parentField}Data`,
           preserveNullAndEmptyArrays: true
         }
       };
-      
+
       const matchStage = { $match: query };
-      
+
       const sortStage = {
         $sort: {
           [`${parentField}Data.${childField}`]: sortOrder === 'asc' ? 1 : -1
         }
       };
-      
+
       const attempts = await Attempt.aggregate([
         matchStage,
         lookupStage,
         unwindStage,
         sortStage
       ]);
-      
+
       // Populate necessary fields after aggregation
       const populatedAttempts = await Attempt.populate(attempts, [
         {
@@ -402,26 +405,27 @@ exports.getUserAttempts = async (req, res) => {
           select: 'name email'
         }
       ]);
-      
-      return res.json({ 
+
+      return res.json({
         success: true,
-        attempts: populatedAttempts 
+        attempts: populatedAttempts
       });
     }
-    
-    // Regular sorting
+
+    // Regular sorting for non-nested fields
     const attempts = await Attempt.find(query)
       .populate('quiz', 'title category difficulty timeLimit passScore')
-      .select('-answers.selectedAnswer') // Don't send answers by default
-      .sort(sort);
-    
-    res.json({ 
+      .select('-answers.selectedAnswer')
+      .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 });
+
+    res.json({
       success: true,
-      attempts 
+      attempts
     });
+
   } catch (error) {
     console.error('Get user attempts error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Server error fetching attempts',
       error: error.message
@@ -437,15 +441,11 @@ exports.getUserAttempts = async (req, res) => {
 exports.getAllAttempts = async (req, res) => {
   try {
     // Check for admin role
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this resource'
-      });
-    }
+  
     
     const { category, user, quiz, status, sortBy = 'startedAt', sortOrder = 'desc' } = req.query;
-    
+    const limit = parseInt(req.query.limit) || 10;
+
     // Build query based on filters
     const query = {};
     
@@ -478,7 +478,7 @@ exports.getAllAttempts = async (req, res) => {
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
     const attempts = await Attempt.find(query)
-      .populate({
+        .populate({
         path: 'user',
         select: 'name email'
       })
@@ -486,8 +486,10 @@ exports.getAllAttempts = async (req, res) => {
         path: 'quiz',
         select: 'title category difficulty'
       })
+      .limit(limit)
       .sort(sort)
       .lean();
+      
     
     res.status(200).json({ 
       success: true,
@@ -503,6 +505,62 @@ exports.getAllAttempts = async (req, res) => {
   }
 };
 
+exports.getRecentAttempts = async (req, res) => {
+  try {
+    const {quizId} = req.params.id;
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Verify the quiz ID is valid
+    if (!quizId) {
+      return res.status(400).json({ message: 'Quiz ID is required' });
+    }
+
+    const attempts = await Attempt.find({ quiz: quizId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate({
+        path: 'user',  // Using 'user' instead of 'userId'
+        select: 'name email',
+        model: 'User',
+        strictPopulate: false
+      });
+
+    const formattedAttempts = attempts.map(attempt => {
+      // Calculate percentage score and round to 2 decimal places
+      const percentageScore = attempt.maxScore > 0 
+        ? (attempt.score / attempt.maxScore) * 100 
+        : 0;
+
+      // Calculate time taken in seconds
+      const timeTaken = attempt.completedAt && attempt.startedAt
+        ? Math.floor((new Date(attempt.completedAt) - new Date(attempt.startedAt)) / 1000)
+        : null;
+
+      return {
+        _id: attempt._id,  // Fixed property name (removed extra underscore)
+        score: Math.round(percentageScore), // Rounding to whole number
+        timeTaken,
+        createdAt: attempt.createdAt,
+        user: attempt.user
+          ? { name: attempt.user.name, email: attempt.user.email }
+          : null,
+      };
+    });
+
+    return res.json({ 
+      success: true,
+      attempts: formattedAttempts,
+      count: formattedAttempts.length
+    });
+  } catch (err) {
+    console.error('Error fetching attempts:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching quiz attempts', 
+      error: process.env.NODE_ENV === 'production' ? null : err.message 
+    });
+  }
+};
 /**
  * Get quiz statistics
  * @route GET /api/attempts/stats/:quizId
@@ -624,68 +682,40 @@ exports.getQuizStats = async (req, res) => {
  * @route GET /api/attempts/:id
  * @access Private/Owner or Admin
  */
-exports.getAttemptById = async (req, res) => {
+exports.getAttemptById = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid attempt ID format'
-      });
-    }
+    // Find the attempt by ID
+    const attempt = await Attempt.findById(req.params.id)
+      .populate('user', 'name email')
+      .populate('quiz')
+      .exec();
 
-    const attempt = await Attempt.findById(id)
-      .populate('quiz', 'title description category difficulty timeLimit passScore questions')
-      .populate('user', 'name email');
-      
     if (!attempt) {
-      return res.status(404).json({
-        success: false,
-        message: 'Attempt not found'
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Attempt not found' 
       });
     }
 
-    // Check if the attempt belongs to the current user or if the user is an admin
-    if (attempt.user !== req.user && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'You are not authorized to view this attempt'
-      });
-    }
+    // Get all questions for this quiz
+    const questions = await Question.find({ quizId: attempt.quiz._id }).exec();
     
-    // Now populate the questions for the quiz
-    if (attempt.quiz && attempt.quiz.questions) {
-      const questions = await Question.find({ 
-        _id: { $in: attempt.quiz.questions }
-      }).select('-options.isCorrect'); // Don't send correct answers to client
-      
-      // Format the response
-      const formattedAttempt = {
+    // Prepare the response object
+    const responseData = {
+      success: true,
+      attempt: {
         ...attempt.toObject(),
         quiz: {
           ...attempt.quiz.toObject(),
-          questions
+          questions: questions
         }
-      };
-      
-      return res.status(200).json({
-        success: true,
-        attempt: formattedAttempt
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      attempt
-    });
+      }
+    };
+    
+    res.status(200).json(responseData);
   } catch (error) {
-    console.error('Get attempt by ID error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching attempt',
-      error: error.message
-    });
+    console.error('Error in getAttemptById:', error);
+    next(error);
   }
 };
 
@@ -735,5 +765,19 @@ exports.deleteAttempt = async (req, res) => {
       message: 'Failed to delete attempt',
       error: error.message
     });
+  }
+};
+
+// GET /api/attempts/user
+exports.getAttemptsByUser = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const attempts = await Attempt.find({ user: userId })
+      .populate('quiz', 'title')
+      .sort({ createdAt: -1 });
+    res.status(200).json({ attempts });
+  } catch (error) {
+    console.error('Error fetching attempts:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };

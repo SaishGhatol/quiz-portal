@@ -85,18 +85,19 @@ exports.getQuizById = async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
-    if (req.userRole !== 'admin' && !quiz.isActive) {
-      return res.status(403).json({ message: 'This quiz is not currently available' });
-    }
+    // Fetch all questions with complete details for all users
+    const questions = await Question.find({ quizId: quiz._id });
 
-    const questions = await Question.find({ quizId: quiz._id })
-      .select(req.userRole === 'admin' ? '+options.isCorrect' : '-options.isCorrect');
-
+    // Return complete question and option details for all users
     res.json({
       quiz,
-      questions: req.userRole === 'admin' ? questions : questions.map(q => ({
+      questions: questions.map(q => ({
         ...q._doc,
-        options: q.options.map(opt => ({ text: opt.text }))
+        options: q.options.map(opt => ({
+          _id: opt._id,
+          text: opt.text,
+          isCorrect: opt.isCorrect // Include isCorrect for all users
+        }))
       }))
     });
   } catch (error) {
@@ -165,12 +166,15 @@ exports.submitQuizAttempt = async (req, res) => {
   try {
     // Extract quiz ID from route parameters and answers from request body
     const { id: quizId } = req.params;
-    const { answers } = req.body;
+    const { answers, startedAt, completedAt } = req.body;
     
+    // Enhanced logging for debugging time issues
     console.log('Quiz submission received:', {
       quizId,
       userId: req.userId,
-      answersCount: answers?.length
+      answersCount: answers?.length,
+      startedAt: startedAt || 'MISSING',
+      completedAt: completedAt || 'MISSING'
     });
     
     // Validate required inputs
@@ -181,38 +185,79 @@ exports.submitQuizAttempt = async (req, res) => {
     if (!req.userId) {
       return res.status(401).json({ message: 'Authentication required' });
     }
-
+    
     if (!answers || !Array.isArray(answers)) {
       return res.status(400).json({ message: 'Answers are required and must be an array' });
     }
-
+    
+    // Handle missing time values
+    let validStartedAt, validCompletedAt;
+    
+    try {
+      // Try to create valid Date objects
+      validStartedAt = startedAt ? new Date(startedAt) : null;
+      validCompletedAt = completedAt ? new Date(completedAt) : new Date();
+      
+      // Validate the date objects
+      if (validStartedAt && isNaN(validStartedAt.getTime())) {
+        console.warn('Invalid startedAt date received:', startedAt);
+        validStartedAt = new Date(Date.now() - 1000 * 60 * 10); // Default to 10 minutes ago
+      }
+      
+      if (isNaN(validCompletedAt.getTime())) {
+        console.warn('Invalid completedAt date received:', completedAt);
+        validCompletedAt = new Date();
+      }
+      
+      // If startedAt is missing or invalid, set a reasonable default
+      if (!validStartedAt) {
+        console.warn('Missing startedAt date, setting default');
+        validStartedAt = new Date(validCompletedAt.getTime() - 1000 * 60 * 10); // Default to 10 minutes before completion
+      }
+      
+      // Sanity check: make sure startedAt is before completedAt
+      if (validStartedAt > validCompletedAt) {
+        console.warn('startedAt is after completedAt, swapping values');
+        [validStartedAt, validCompletedAt] = [validCompletedAt, validStartedAt];
+      }
+      
+      console.log('Validated time values:', {
+        validStartedAt: validStartedAt.toISOString(),
+        validCompletedAt: validCompletedAt.toISOString()
+      });
+    } catch (error) {
+      console.error('Error processing date values:', error);
+      validStartedAt = new Date(Date.now() - 1000 * 60 * 10); // 10 minutes ago
+      validCompletedAt = new Date();
+    }
+    
     // Find the quiz by ID
     const quiz = await Quiz.findById(quizId);
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz not found' });
     }
-
+    
     // Get all questions for this quiz
     const questions = await Question.find({ quizId });
     if (!questions.length) {
       return res.status(404).json({ message: 'No questions found for this quiz' });
     }
-
+    
     // Process answers and calculate score
     let score = 0;
     let maxScore = 0;
     const processedAnswers = [];
-
-    // Process each question, including those without answers
+    
+    // Process each question
     for (const question of questions) {
       const userAnswer = answers.find(a => a.questionId === question._id.toString());
       maxScore += question.points;
-
+      
       // Default values for unanswered questions
       let selectedAnswer = '';
       let isCorrect = false;
       let pointsEarned = 0;
-
+      
       // If user answered this question
       if (userAnswer && userAnswer.selectedOptionId) {
         const selectedOption = question.options.find(
@@ -226,7 +271,7 @@ exports.submitQuizAttempt = async (req, res) => {
           score += pointsEarned;
         }
       }
-
+      
       processedAnswers.push({
         questionId: question._id,
         selectedAnswer,
@@ -234,22 +279,29 @@ exports.submitQuizAttempt = async (req, res) => {
         pointsEarned
       });
     }
-
-    // Create the attempt with correct field references
+    
+    // Create the attempt with validated date values
     const attempt = await Attempt.create({
-      user: req.userId,  // Match schema field name
-      quiz: quizId,      // Match schema field name  
+      user: req.userId,
+      quiz: quizId,
       score,
       maxScore,
-      startedAt: new Date(),
-      completedAt: new Date(),
+      startedAt: validStartedAt,
+      completedAt: validCompletedAt,
       answers: processedAnswers
     });
-
+    
+    // Make sure created attempt has the time values
+    console.log('Created attempt time values:', {
+      attemptId: attempt._id,
+      startedAt: attempt.startedAt,
+      completedAt: attempt.completedAt
+    });
+    
     // Update quiz statistics
     quiz.totalAttempts += 1;
     await quiz.save();
-
+    
     // Return success response
     return res.status(201).json({
       message: 'Quiz submitted successfully',
@@ -258,15 +310,14 @@ exports.submitQuizAttempt = async (req, res) => {
       maxScore,
       percentageScore: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
     });
-
   } catch (error) {
     console.error('Submit quiz error:', error);
     
     // Log more detailed error information for debugging
     if (error.name === 'ValidationError') {
       console.error('Validation error details:', JSON.stringify(error.errors));
-      return res.status(400).json({ 
-        message: 'Validation error', 
+      return res.status(400).json({
+        message: 'Validation error',
         details: Object.keys(error.errors).map(key => ({
           field: key,
           message: error.errors[key].message
@@ -279,7 +330,7 @@ exports.submitQuizAttempt = async (req, res) => {
     }
     
     // General server error
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: 'Server error submitting quiz',
       error: error.message
     });

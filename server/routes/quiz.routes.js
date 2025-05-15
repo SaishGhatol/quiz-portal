@@ -10,7 +10,7 @@ router.get('/', quizController.getAllQuizzes);
 // Routes for quiz attempts (placed early to avoid conflicts with '/:id')
 router.post('/:id/submit', authenticateJWT, quizController.submitQuizAttempt);
 router.get('/:id/attempts', authenticateJWT, quizController.getRecentAttemptsByQuizId);
-router.get('/attempts/:id', authenticateJWT, quizController.getQuizAttemptById);
+router.get('/attempts/:id' , quizController.getQuizAttemptById);
 router.get('/:id/statistics', authenticateJWT, quizController.getQuizStatistics);
 router.get('/:id/questions', authenticateJWT, quizController.getQuizById); 
 router.get("/my-attempts" ,authenticateJWT,quizController.getUserAttempts)

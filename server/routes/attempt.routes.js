@@ -19,21 +19,21 @@
 const express = require('express');
 const router = express.Router();
 const attemptController = require('../controllers/attempt.controller');
-const { authenticateJWT } = require('../middleware/auth.middleware');
+const { authenticateJWT,isAdmin } = require('../middleware/auth.middleware');
 
 /**
  * @route   GET /api/attempts/user
  * @desc    Get attempts for the logged in user with optional filtering
  * @access  Private
  */
-router.get('/user', authenticateJWT, attemptController.getUserAttempts);
+router.get('/user', authenticateJWT, attemptController.getAttemptsByUser);
 
 /**
  * @route   GET /api/attempts/all
  * @desc    Get all attempts (admin only)
  * @access  Private/Admin
  */
-router.get('/all', authenticateJWT, attemptController.getAllAttempts);
+router.get('/all', isAdmin,authenticateJWT, attemptController.getAllAttempts);
 
 /**
  * @route   GET /api/attempts/stats/:quizId

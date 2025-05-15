@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../../utils/api';
+import {Loader} from "lucide-react"
 
 const TakeQuiz = () => {
   const { id } = useParams();
@@ -15,6 +16,7 @@ const TakeQuiz = () => {
   const [error, setError] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
   const [quizStarted, setQuizStarted] = useState(false);
+  const [startTime, setStartTime] = useState(null); // Add startTime state
 
   useEffect(() => {
     const fetchQuiz = async () => {
@@ -68,6 +70,7 @@ const TakeQuiz = () => {
 
   const startQuiz = () => {
     setQuizStarted(true);
+    setStartTime(new Date()); // Record the start time when quiz is started
   };
 
   const handleAnswerSelect = (questionId, optionId) => {
@@ -118,10 +121,34 @@ const TakeQuiz = () => {
         }));
   
       console.log('Submitting answers:', formattedAnswers);
-  
-      const response = await api.post(`/quizzes/${id}/submit`, {
-        answers: formattedAnswers
+      
+      // Add debug logging for time values
+      console.log('Quiz timing data:', { 
+        startTime: startTime,
+        startTimeISO: startTime ? startTime.toISOString() : 'null',
+        quizStarted: quizStarted
       });
+      
+      // Fix: Always initialize startTime if it's not set yet but quiz is being submitted
+      if (!startTime && quizStarted) {
+        console.log('Start time was missing but quiz was started - setting default start time');
+        setStartTime(new Date(Date.now() - 1000 * 60)); // Assume quiz started 1 minute ago
+      }
+      
+      // Calculate quiz duration in minutes
+      const endTime = new Date();
+      const quizDuration = startTime ? Math.round((endTime - startTime) / (1000 * 60)) : null;
+  
+      // Debug the payload before sending
+      const payload = {
+        answers: formattedAnswers,
+        startedAt: startTime ? startTime.toISOString() : new Date(Date.now() - 1000 * 60).toISOString(), // Fallback if somehow missing
+        completedAt: endTime.toISOString() // Send end time to server
+      };
+      
+      console.log('Submitting quiz with payload:', payload);
+  
+      const response = await api.post(`/quizzes/${id}/submit`, payload);
   
       toast.success('Quiz submitted successfully!');
       navigate(`/quiz/results/${response.data.attemptId}`);
@@ -133,12 +160,13 @@ const TakeQuiz = () => {
     }
   };
 
+  
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
-        <div className="flex flex-col items-center">
-          <div className="w-12 h-12 md:w-16 md:h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
-          <p className="mt-4 text-base md:text-lg font-medium text-gray-600">Loading quiz...</p>
+      <div className="flex items-center justify-center min-h-64 bg-white rounded-lg shadow-md">
+        <div className="text-center p-10">
+          <Loader className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Loading your quiz...</p>
         </div>
       </div>
     );

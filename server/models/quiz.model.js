@@ -27,10 +27,6 @@ const quizSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  isPublished: {
-    type: Boolean,
-    default: false
-  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -44,7 +40,7 @@ const quizSchema = new mongoose.Schema({
     type: Number,
     default: 0
   }
-}, { timestamps: true });
+});
 
 const Quiz = mongoose.model('Quiz', quizSchema);
 module.exports = Quiz;

@@ -1,18 +1,19 @@
 const Quiz = require('../models/quiz.model');
 const Attempt = require('../models/attempt.model');
+const User =require("../models/user.model")
 
 exports.getDashboard = async (req, res) => {
   try {
-    const userId = req.userId; // set by auth middleware
-
+    const userId = req.userId; 
     // Count total active quizzes
     const totalQuizzes = await Quiz.countDocuments();
 
     // Count user attempts
-    const totalAttempts = await Attempt.countDocuments({ userId });
-
+    const totalAttempts = await Attempt.countDocuments({user:userId })
+    .populate('quiz', 'title')
+    .sort({ createdAt: -1 });
     // Get recent completed quizzes
-    const completedAttempts = await Attempt.find({ userId })
+    const completedAttempts = await Attempt.find({ user:userId })
       .populate('quiz', 'title')
       .sort({ createdAt: -1 })
       .limit(5)
@@ -22,6 +23,7 @@ exports.getDashboard = async (req, res) => {
       _id: attempt.quiz?._id,
       title: attempt.quiz?.title,
       score: attempt.score,
+      maxScore: attempt.maxScore,
       completedAt: attempt.completedAt || attempt.createdAt,
       attemptId: attempt._id
     }));

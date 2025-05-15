@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../../utils/api';
 import AuthContext from '../../contexts/AuthContext';
-
+import {Loader} from "lucide-react";
 const QuizDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -51,28 +51,6 @@ const QuizDetail = () => {
     fetchQuestionCount();
   }, [id]);
 
-  useEffect(() => {
-    const fetchUserAttempts = async () => {
-      if (!currentUser) return;
-      
-      setAttemptsLoading(true);
-      try {
-        // Corrected endpoint based on your schema structure
-        const attemptsResponse = await api.get(`/attempts/user?quiz=${id}`);
-        setUserAttempts(attemptsResponse.data.attempts || []);
-      } catch (error) {
-        console.error('Error fetching attempts:', error);
-        setUserAttempts([]);
-        if (!(error.response?.status === 404 && error.response?.data?.message === 'Attempt not found')) {
-          toast.warning('Could not load your previous attempts');
-        }
-      } finally {
-        setAttemptsLoading(false);
-      }
-    };
-
-    fetchUserAttempts();
-  }, [id, currentUser]);
 
   const handleStartQuiz = () => {
     navigate(`/quiz/${id}/take`);
@@ -102,11 +80,14 @@ const QuizDetail = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  
   if (loading) {
     return (
-      <div className="text-center py-10">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
-        <p className="text-gray-500">Loading quiz...</p>
+      <div className="flex items-center justify-center min-h-64 bg-white rounded-lg shadow-md">
+        <div className="text-center p-10">
+          <Loader className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Loading your quiz Details...</p>
+        </div>
       </div>
     );
   }
@@ -200,74 +181,7 @@ const QuizDetail = () => {
                 </svg>
                 Start Quiz
               </button>
-              
-              {/* User's previous attempts */}
-              <div className="mt-8">
-                <h2 className="text-xl font-bold mb-4">Your Previous Attempts</h2>
-                
-                {attemptsLoading ? (
-                  <div className="text-center py-4">
-                    <div className="inline-block animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-blue-500 mb-2"></div>
-                    <p className="text-gray-500 text-sm">Loading your attempts...</p>
-                  </div>
-                ) : userAttempts.length > 0 ? (
-                  <div className="bg-white shadow overflow-hidden border-b border-gray-200 sm:rounded-lg overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Score
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Action
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {userAttempts.map((attempt) => (
-                          <tr key={attempt._id}>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                              {formatDate(attempt.completedAt || attempt.createdAt)}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                attempt.score >= 70 ? 'bg-green-100 text-green-800' : 
-                                attempt.score >= 40 ? 'bg-yellow-100 text-yellow-800' : 
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {/* Display score as percentage of maxScore */}
-                                {Math.round((attempt.score / attempt.maxScore) * 100)}%
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm">
-                              <Link 
-                                to={`/attempts/${attempt._id}`}
-                                className="text-blue-500 hover:text-blue-700 flex items-center w-fit"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                View Results
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 p-4 rounded-md flex items-center space-x-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-gray-600">You haven't attempted this quiz yet.</p>
-                  </div>
-                )}
-              </div>
+            
             </div>
           ) : (
             <div className="bg-blue-50 p-4 rounded-md flex items-start space-x-3">

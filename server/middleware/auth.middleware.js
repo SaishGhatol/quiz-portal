@@ -12,7 +12,7 @@ exports.authenticateJWT = (req, res, next) => {
   
   try {
     const decoded = jwt.verify(token, config.JWT_SECRET);
-    req.userId = decoded.id;
+    req.userId = decoded.id   
     req.userRole = decoded.role;
     next();
   } catch (error) {
