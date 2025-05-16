@@ -268,7 +268,7 @@ const Dashboard = () => {
                   {['Programming', 'Science', 'Mathematics' , 'General Knowledge'].map(category => (
                     <a
                       key={category}
-                      href={`/category/${category.toLowerCase().replace(' & ', '-')}`}
+                      href={`/`}
                       className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col items-center text-center"
                     >
                       <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
