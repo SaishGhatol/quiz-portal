@@ -47,7 +47,7 @@ api.interceptors.response.use(
           // Use timeout to allow current code to finish execution
           setTimeout(() => {
             window.location.href = '/login?reason=session_expired';
-          }, 100000000000);
+          }, 100000000);
         }
       }
     }
