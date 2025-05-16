@@ -102,7 +102,7 @@ const Dashboard = () => {
                 {stats.totalAttempts}
               </p>
               <a
-                href="/my-attempts"
+                href="/attempts/user"
                 className="group inline-flex items-center text-sm font-medium text-blue-900 border border-blue-900 rounded-md px-3 py-1.5 hover:bg-blue-900 hover:text-white transition-colors"
               >
                 View My Attempts
