@@ -101,8 +101,8 @@ const Dashboard = () => {
               <p className="text-5xl font-bold bg-gradient-to-r from-blue-900 to-purple-900 bg-clip-text text-transparent mb-4">
                 {stats.totalAttempts}
               </p>
-              <a
-                href="/my-attempts"
+              <Link
+                to="/my-attempts"
                 className="group inline-flex items-center text-sm font-medium text-blue-900 border border-blue-900 rounded-md px-3 py-1.5 hover:bg-blue-900 hover:text-white transition-colors"
               >
                 View My Attempts
@@ -120,7 +120,7 @@ const Dashboard = () => {
                     d="M14 5l7 7m0 0l-7 7m7-7H3"
                   />
                 </svg>
-              </a>
+              </Link>
 
             </div>
           </div>
@@ -265,7 +265,7 @@ const Dashboard = () => {
               <div className="mt-10 pt-8 border-t border-blue-100">
                 <h4 className="text-lg font-semibold text-gray-800 mb-6 text-center">Popular Quiz Categories</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {['Programming', 'Science', 'Mathematics' , 'General Knowledge'].map(category => (
+                  {['Programming', 'Science', 'Mathematics', 'General Knowledge'].map(category => (
                     <a
                       key={category}
                       href={`/`}
