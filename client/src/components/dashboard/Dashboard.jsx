@@ -171,15 +171,15 @@ const Dashboard = () => {
         <div className="p-8">
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-bold text-gray-800">Recently Completed Quizzes</h2>
-            <a
-              href="/my-attempts"
+            <Link
+              to="/my-attempts"
               className="group text-blue-900 hover:text-purple-900 font-medium text-sm flex items-center transition-colors bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg"
             >
               View All
               <svg className="w-4 h-4 ml-1 transform transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
-            </a>
+            </Link>
           </div>
 
           {stats.completedQuizzes && stats.completedQuizzes.length > 0 ? (
