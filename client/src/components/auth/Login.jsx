@@ -14,6 +14,25 @@ const Login = () => {
   
   const from = location.state?.from?.pathname || '/dashboard';
   
+  // Demo credentials
+  const demoCredentials = {
+    user: {
+      email: 'anuj@dev.com',
+      password: '123123123'
+    },
+    admin: {
+      email: 'saish@dev.com',
+      password: '123123123'
+    }
+  };
+  
+  const handleDemoLogin = (type) => {
+    const credentials = demoCredentials[type];
+    setEmail(credentials.email);
+    setPassword(credentials.password);
+    toast.info(`Demo ${type} credentials loaded`);
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -40,6 +59,27 @@ const Login = () => {
         </div>
         
         <div className="p-8">
+          {/* Demo Credentials Section */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Demo Credentials</h3>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('user')}
+                className="flex-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition duration-150 ease-in-out"
+              >
+                Demo User
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('admin')}
+                className="flex-1 px-3 py-2 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition duration-150 ease-in-out"
+              >
+                Demo Admin
+              </button>
+            </div>
+          </div>
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="email">
@@ -108,4 +148,3 @@ const Login = () => {
 };
 
 export default Login;
-
