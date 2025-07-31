@@ -3,32 +3,45 @@ import { Link } from 'react-router-dom';
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-800 text-white py-2">
-      <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          <div className="mb-6 md:mb-0">
-            <div className="font-bold text-xl mb-2 text-center md:text-left">Quiz Portal</div>
-            <p className="text-center md:text-left text-gray-300">&copy; {new Date().getFullYear()} Quiz Portal. All rights reserved.</p>
+    <footer className="bg-gradient-to-tr from-gray-900 via-gray-800 to-gray-900 text-gray-300 py-10 border-t border-gray-700">
+      <div className="max-w-7xl mx-auto px-6 md:px-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
+          
+          {/* Logo & Copyright */}
+          <div>
+            <h2 className="text-2xl font-extrabold text-white mb-3">Quiz Portal</h2>
+            <p className="text-sm text-gray-400">&copy; {new Date().getFullYear()} Quiz Portal. All rights reserved.</p>
           </div>
           
-          <div className="mb-4 md:mb-0 text-sm text-gray-400 text-center md:text-left">
-            Made with ❤️ for knowledge seekers by 
-            <Link to="https://linkedin.com/in/saish-ghatol" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 text-md font-bold text-white ml-1">
-              SaishGhatol
-            </Link>
+          {/* Developer Credit */}
+          <div>
+            <p className="text-sm">
+              Made with <span className="text-red-500">❤️</span> by
+              <Link
+                to="https://linkedin.com/in/saish-ghatol"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:underline ml-1"
+              >
+                Saish Ghatol
+              </Link>
+            </p>
+            <p className="text-xs mt-1 text-gray-500">for all passionate learners ✨</p>
           </div>
           
-          <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-8 text-center md:text-left">
-            <Link to="/terms" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105">
+          {/* Links */}
+          <div className="flex flex-col space-y-2 md:items-end">
+            <Link to="/terms" className="hover:text-white hover:underline transition duration-300">
               Terms of Service
             </Link>
-            <Link to="/privacy" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105">
+            <Link to="/privacy" className="hover:text-white hover:underline transition duration-300">
               Privacy Policy
             </Link>
-            <Link to="/contact" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105">
+            <Link to="/contact" className="hover:text-white hover:underline transition duration-300">
               Contact Us
             </Link>
           </div>
+
         </div>
       </div>
     </footer>
