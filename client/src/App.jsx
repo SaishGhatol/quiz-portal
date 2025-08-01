@@ -45,7 +45,7 @@ const App = () => {
       <Router>
         <div className="flex flex-col min-h-screen">
           <Navbar />
-          <main className="flex-grow container mx-auto px-4 py-6">
+          <main className="flex-grow container mx-auto px-4 py-6 pt-16">
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<QuizList />} />
