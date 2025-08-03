@@ -11,6 +11,7 @@ import Footer from './components/layout/Footer/Footer';
 import TermsPage from './components/layout/Footer/TermsPage';
 import PrivacyPage from './components/layout/Footer/PrivacyPage';
 import ContactPage from './components/layout/Footer/ContactPage';
+import Home from './components/Home';
 
 // Auth components
 import Login from './components/auth/Login';
@@ -48,35 +49,36 @@ const App = () => {
           <main className="flex-grow container mx-auto px-4 py-6 pt-16">
             <Routes>
               {/* Public Routes */}
-              <Route path="/" element={<QuizList />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/quizzes" element={<QuizList />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               
               {/* Protected Routes */}
               <Route element={<ProtectedRoute />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/my-attempts" element={<UserAttempts />} />
-                <Route path="/attempts/:id" element={<AttemptDetail />} />
-                <Route path="/quiz/:id" element={<QuizDetail />} />
-                <Route path="/quiz/:id/take" element={<TakeQuiz />} />
-                <Route path="/quiz/results/:attemptId" element={<QuizResults />} />
+                <Route path="/dashboard" element={<div className="container mx-auto px-4 py-6"><Dashboard /></div>} />
+                <Route path="/profile" element={<div className="container mx-auto px-4 py-6"><Profile /></div>} />
+                <Route path="/my-attempts" element={<div className="container mx-auto px-4 py-6"><UserAttempts /></div>} />
+                <Route path="/attempts/:id" element={<div className="container mx-auto px-4 py-6"><AttemptDetail /></div>} />
+                <Route path="/quiz/:id" element={<div className="container mx-auto px-4 py-6"><QuizDetail /></div>} />
+                <Route path="/quiz/:id/take" element={<div className="container mx-auto px-4 py-6"><TakeQuiz /></div>} />
+                <Route path="/quiz/results/:attemptId" element={<div className="container mx-auto px-4 py-6"><QuizResults /></div>} />
               </Route>
               
               {/* Admin Routes */}
                <Route element={<AdminRoute />}>
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/admin/quizzes" element={<ManageQuizzes />} />
-                <Route path="/admin/quizzes/create" element={<CreateQuiz />} />
-                <Route path="/admin/quizzes/:id/edit" element={<EditQuiz />} />
-                <Route path="/admin/quizzes/:id/questions" element={<ManageQuestions />} />
-                <Route path="/admin/quizzes/:id/statistics" element={<QuizStatistics />} />
-                <Route path="/admin/users" element={<ManageUsers />} />
+                <Route path="/admin" element={<div className="container mx-auto px-4 py-6"><AdminDashboard /></div>} />
+                <Route path="/admin/quizzes" element={<div className="container mx-auto px-4 py-6"><ManageQuizzes /></div>} />
+                <Route path="/admin/quizzes/create" element={<div className="container mx-auto px-4 py-6"><CreateQuiz /></div>} />
+                <Route path="/admin/quizzes/:id/edit" element={<div className="container mx-auto px-4 py-6"><EditQuiz /></div>} />
+                <Route path="/admin/quizzes/:id/questions" element={<div className="container mx-auto px-4 py-6"><ManageQuestions /></div>} />
+                <Route path="/admin/quizzes/:id/statistics" element={<div className="container mx-auto px-4 py-6"><QuizStatistics /></div>} />
+                <Route path="/admin/users" element={<div className="container mx-auto px-4 py-6"><ManageUsers /></div>} />
               </Route> 
               
-              <Route path="/terms" element={<TermsPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/contact" element={<ContactPage />} />
+              <Route path="/terms" element={<div className="container mx-auto px-4 py-6"><TermsPage /></div>} />
+            <Route path="/privacy" element={<div className="container mx-auto px-4 py-6"><PrivacyPage /></div>} />
+            <Route path="/contact" element={<div className="container mx-auto px-4 py-6"><ContactPage /></div>} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
 

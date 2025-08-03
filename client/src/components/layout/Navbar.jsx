@@ -41,7 +41,8 @@ const Navbar = () => {
           
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-          
+            <Link to="/quizzes" className="px-3 py-2 rounded-md hover:bg-blue-500 hover:bg-opacity-50 transition duration-150">Explore Quizzes</Link>
+            
             {currentUser ? (
               <>
                 <Link to="/dashboard" className="px-3 py-2 rounded-md hover:bg-blue-500 hover:bg-opacity-50 transition duration-150">Dashboard</Link>
@@ -134,7 +135,8 @@ const Navbar = () => {
         {/* Mobile Navigation */}
         {isMenuOpen && (
           <div className="md:hidden mt-3 pt-3 border-t border-blue-500">
-            <Link to="/" className="block py-2 px-3 rounded-md hover:bg-blue-500 hover:bg-opacity-50" onClick={toggleMenu}>Quizzes</Link>
+            <Link to="/" className="block py-2 px-3 rounded-md hover:bg-blue-500 hover:bg-opacity-50" onClick={toggleMenu}>Home</Link>
+            <Link to="/quizzes" className="block py-2 px-3 rounded-md hover:bg-blue-500 hover:bg-opacity-50" onClick={toggleMenu}>Explore Quizzes</Link>
             
             {currentUser ? (
               <>
