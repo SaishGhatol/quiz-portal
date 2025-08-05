@@ -1,5 +1,6 @@
+// client/quiz/QuizList.jsx
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // <--- Ensure useNavigate is imported
 import api from '../../utils/api';
 import QuizCard from './QuizCard';
 import { Search, Filter, Book, Star ,RotateCw, AlertCircle} from 'lucide-react';
@@ -13,10 +14,12 @@ const QuizList = () => {
     difficulty: '',
     search: ''
   });
-  
+
+  const navigate = useNavigate(); // <--- Ensure this line is present
+
   const categories = ['Programming', 'Science', 'Mathematics', 'History', 'Geography', 'General Knowledge'];
   const difficulties = ['Easy', 'Medium', 'Hard'];
-  
+
   const fetchQuizzes = async () => {
     setLoading(true);
     try {
@@ -24,7 +27,7 @@ const QuizList = () => {
       if (filters.category) params.append('category', filters.category);
       if (filters.difficulty) params.append('difficulty', filters.difficulty);
       if (filters.search) params.append('search', filters.search);
-      
+
       const response = await api.get(`/quizzes?${params}`);
       setQuizzes(response.data.quizzes);
       setError(null);
@@ -35,21 +38,36 @@ const QuizList = () => {
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
     fetchQuizzes();
   }, [filters]);
-  
+
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
   };
-  
+
   const handleSearch = (e) => {
     e.preventDefault();
     fetchQuizzes();
   };
-  
+
+  // --- UPDATED handleRandomizeQuiz FUNCTION ---
+  const handleRandomizeQuiz = () => {
+    if (loading || quizzes.length === 0) {
+      alert('Quizzes are still loading or none are available to select randomly.');
+      return;
+    }
+
+    const randomIndex = Math.floor(Math.random() * quizzes.length);
+    const randomQuiz = quizzes[randomIndex];
+
+    // Navigate to the correct path as defined in App.js
+    navigate(`/quiz/${randomQuiz._id}/take`);
+  };
+  // --- END UPDATED handleRandomizeQuiz FUNCTION ---
+
   return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
@@ -58,11 +76,11 @@ const QuizList = () => {
             Knowledge Arena
           </h1>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Test your skills with our curated collection of interactive quizzes. 
+            Test your skills with our curated collection of interactive quizzes.
             <span className="block mt-1 text-sm text-gray-500">Updated daily • Expert verified • Community driven</span>
           </p>
         </div>
-  
+
         {/* Filter Section */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl mb-8 border border-gray-200/60">
           <div className="p-6 lg:p-8">
@@ -70,7 +88,7 @@ const QuizList = () => {
               <Filter className="h-6 w-6" strokeWidth={2} />
               <h2 className="text-2xl font-semibold">Refine Your Search</h2>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Category Filter */}
               <div className="relative group">
@@ -92,7 +110,7 @@ const QuizList = () => {
                   </div>
                 </div>
               </div>
-  
+
               {/* Difficulty Filter */}
               <div className="relative group">
                 <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Difficulty</label>
@@ -115,7 +133,7 @@ const QuizList = () => {
                   </div>
                 </div>
               </div>
-  
+
               {/* Search Input */}
               <div className="md:col-span-2 relative group">
                 <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Search</label>
@@ -139,7 +157,27 @@ const QuizList = () => {
             </div>
           </div>
         </div>
-  
+
+        {/* Buttons Section */}
+        <div className="mb-8 flex flex-col sm:flex-row justify-center gap-4">
+            {/* Existing Create New Quiz Button */}
+            <Link
+                to="/create-quiz" // Assuming you have a route for creating quizzes
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 w-full sm:w-auto text-center"
+            >
+                ➕ Create New Quiz
+            </Link>
+
+            {/* RANDOMIZE QUIZ BUTTON */}
+            <button
+                onClick={handleRandomizeQuiz}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 w-full sm:w-auto flex items-center justify-center gap-2"
+            >
+                <RotateCw className="h-5 w-5" />
+                Select a random quiz
+            </button>
+        </div>
+
         {/* Results Header */}
         {!loading && !error && (
           <div className="mb-6 flex items-center justify-between px-2">
@@ -149,7 +187,7 @@ const QuizList = () => {
                 <span className="ml-2 text-sm text-gray-500">(filtered)</span>
               )}
             </div>
-            <button 
+            <button
               onClick={() => setFilters({ category: '', difficulty: '', search: '' })}
               className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1"
             >
@@ -158,7 +196,7 @@ const QuizList = () => {
             </button>
           </div>
         )}
-  
+
         {/* Content States */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -172,8 +210,8 @@ const QuizList = () => {
               <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Oops! Something went wrong</h3>
               <p className="text-gray-600 mb-6">{error}</p>
-              <button 
-                onClick={fetchQuizzes} 
+              <button
+                onClick={fetchQuizzes}
                 className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium flex items-center gap-2 mx-auto"
               >
                 <RotateCw className="h-4 w-4" />
@@ -187,8 +225,8 @@ const QuizList = () => {
               <Book className="h-16 w-16 text-blue-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No quizzes found</h3>
               <p className="text-gray-600 mb-6">Try adjusting your filters or search terms</p>
-              <button 
-                onClick={() => setFilters({ category: '', difficulty: '', search: '' })} 
+              <button
+                onClick={() => setFilters({ category: '', difficulty: '', search: '' })}
                 className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 mx-auto"
               >
                 Clear Filters
@@ -205,5 +243,5 @@ const QuizList = () => {
       </div>
     );
   };
-  
+
   export default QuizList;
