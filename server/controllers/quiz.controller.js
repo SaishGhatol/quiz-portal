@@ -29,18 +29,48 @@ exports.createQuiz = async (req, res) => {
   }
 };
 // Get all quizzes (with filters)
+
 exports.getAllQuizzes = async (req, res, next) => {
   try {
-    const { page = 1, limit = 100, search = '', sortBy = 'createdAt', order = 'desc' } = req.query;
+    const { 
+      page = 1, 
+      limit = 100, 
+      search = '', 
+      category = '',     // ADD THIS
+      difficulty = '',   // ADD THIS
+      sortBy = 'createdAt', 
+      order = 'desc' 
+    } = req.query;
 
     // Create query object
     const query = {};
+    
+    // Search filter
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } }
       ];
     }
+    
+    // Category filter - ADD THIS
+    if (category) {
+      query.category = category;
+    }
+    
+    // Difficulty filter - ADD THIS
+    if (difficulty) {
+  query.difficulty = { $regex: new RegExp(`^${difficulty}$`, 'i') };
+}
+
+    
+    // Debug logging (remove in production)
+    console.log('Query filters:', {
+      search,
+      category,
+      difficulty,
+      finalQuery: query
+    });
 
     // Set sort order
     const sort = {};
@@ -48,7 +78,7 @@ exports.getAllQuizzes = async (req, res, next) => {
 
     // Execute query with pagination
     const quizzes = await Quiz.find(query)
-      .populate('createdBy', 'name email') // Fixed populate to specify the field and what to populate
+      .populate('createdBy', 'name email')
       .sort(sort)
       .limit(parseInt(limit))
       .skip((page - 1) * limit)
@@ -56,6 +86,12 @@ exports.getAllQuizzes = async (req, res, next) => {
 
     // Get total count for pagination
     const total = await Quiz.countDocuments(query);
+
+    // Debug logging (remove in production)
+    console.log('Results:', {
+      totalFound: total,
+      returnedCount: quizzes.length
+    });
 
     // Format response to match what frontend expects
     res.status(200).json({
@@ -69,6 +105,8 @@ exports.getAllQuizzes = async (req, res, next) => {
     next(error);
   }
 };
+
+
 // Get quiz by ID with questions
 exports.getQuizById = async (req, res) => {
   try {
