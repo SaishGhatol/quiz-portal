@@ -1,6 +1,6 @@
 // client/quiz/QuizList.jsx
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // <--- Ensure useNavigate is imported
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import QuizCard from './QuizCard';
 import { Search, Filter, Book, Star ,RotateCw, AlertCircle} from 'lucide-react';
@@ -15,7 +15,7 @@ const QuizList = () => {
     search: ''
   });
 
-  const navigate = useNavigate(); // <--- Ensure this line is present
+  const navigate = useNavigate();
 
   const categories = ['Programming', 'Science', 'Mathematics', 'History', 'Geography', 'General Knowledge'];
   const difficulties = ['Easy', 'Medium', 'Hard'];
@@ -53,7 +53,6 @@ const QuizList = () => {
     fetchQuizzes();
   };
 
-  // --- UPDATED handleRandomizeQuiz FUNCTION ---
   const handleRandomizeQuiz = () => {
     if (loading || quizzes.length === 0) {
       alert('Quizzes are still loading or none are available to select randomly.');
@@ -63,10 +62,8 @@ const QuizList = () => {
     const randomIndex = Math.floor(Math.random() * quizzes.length);
     const randomQuiz = quizzes[randomIndex];
 
-    // Navigate to the correct path as defined in App.js
     navigate(`/quiz/${randomQuiz._id}/take`);
   };
-  // --- END UPDATED handleRandomizeQuiz FUNCTION ---
 
   return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -89,7 +86,8 @@ const QuizList = () => {
               <h2 className="text-2xl font-semibold">Refine Your Search</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* UPDATED GRID LAYOUT FOR FILTERS AND BUTTON */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* Changed to md:grid-cols-4 */}
               {/* Category Filter */}
               <div className="relative group">
                 <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Category</label>
@@ -134,8 +132,8 @@ const QuizList = () => {
                 </div>
               </div>
 
-              {/* Search Input */}
-              <div className="md:col-span-2 relative group">
+              {/* Search Input - Now takes 2 columns on medium screens */}
+              <div className="md:col-span-1 relative group"> {/* Changed to md:col-span-1 */}
                 <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Search</label>
                 <form onSubmit={handleSearch} className="relative">
                   <input
@@ -154,29 +152,22 @@ const QuizList = () => {
                   </button>
                 </form>
               </div>
+
+              {/* RANDOMIZE QUIZ BUTTON - Now placed at the end of the filter row */}
+              <div className="relative group flex items-end"> {/* Use flex items-end to align with other inputs */}
+                <button
+                    onClick={handleRandomizeQuiz}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 flex items-center justify-center gap-2"
+                >
+                    <RotateCw className="h-5 w-5" />
+                    Random Quiz
+                </button>
+              </div>
             </div>
+            
           </div>
         </div>
 
-        {/* Buttons Section */}
-        <div className="mb-8 flex flex-col sm:flex-row justify-center gap-4">
-            {/* Existing Create New Quiz Button */}
-            <Link
-                to="/create-quiz" // Assuming you have a route for creating quizzes
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 w-full sm:w-auto text-center"
-            >
-                ➕ Create New Quiz
-            </Link>
-
-            {/* RANDOMIZE QUIZ BUTTON */}
-            <button
-                onClick={handleRandomizeQuiz}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 w-full sm:w-auto flex items-center justify-center gap-2"
-            >
-                <RotateCw className="h-5 w-5" />
-                Select a random quiz
-            </button>
-        </div>
 
         {/* Results Header */}
         {!loading && !error && (
