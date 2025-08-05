@@ -1,97 +1,196 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Github, Twitter, Linkedin, Mail } from 'lucide-react';
+import { Github, Twitter, Linkedin, Mail, MapPin, Phone, Clock, ExternalLink, ClipboardList } from 'lucide-react';
 
 const Footer = () => {
   return (
-    <footer className="bg-gradient-to-r from-blue-900 to-purple-900 text-white py-10 mt-16 shadow-inner">
-      <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-10">
-          {/* Brand & About */}
-          <div className="mb-8 md:mb-0 flex-1 flex flex-col items-center md:items-start">
-            <div className="font-extrabold text-3xl mb-2 text-center md:text-left tracking-wider drop-shadow-lg">Quiz Portal</div>
-            <p className="text-center md:text-left text-blue-200 text-base font-medium mb-2">
-              &copy; {new Date().getFullYear()} Quiz Portal. All rights reserved.
-            </p>
-            <p className="text-center md:text-left text-gray-200 text-md italic max-w-md">
-              Quiz Portal is a modern platform for learning, testing, and improving your knowledge across various topics. Join, challenge yourself, and grow!
-            </p>
-          </div>
+    <footer className="bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 text-white">
+      {/* Main Footer Content */}
+      <div className="container mx-auto px-6 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+          
+          {/* Brand & Description */}
+          <div className="lg:col-span-1">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg flex items-center justify-center hover:scale-105 transition-transform duration-200">
+               <ClipboardList className="w-6 h-6 text-white" />
+              </div>
 
-          {/* Creator & Socials */}
-          <div className="mb-8 md:mb-0 flex-1 flex flex-col items-center md:items-start text-base text-gray-200">
-            <span className="block mb-2 text-center md:text-left">
-              Made with <span className="text-red-400">❤️</span> for knowledge seekers by
-              <a
-                href="https://linkedin.com/in/saish-ghatol"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 text-md font-bold text-white ml-1"
-              >
-                Saish Ghatol
-              </a>
-            </span>
-            <div className="flex items-center justify-center md:justify-start gap-6 mt-2">
+              <div className="font-bold text-2xl bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Quiz Portal
+              </div>
+            </div>
+            
+            <p className="text-slate-300 text-sm leading-relaxed mb-6">
+              Bringing the authentic experience of knowledge testing and learning to students everywhere. 
+              Crafted with care, served with passion since 2024.
+            </p>
+            
+            {/* Social Media Icons */}
+            <div className="flex gap-4">
               <a
                 href="https://github.com/saishghatol"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-gray-100"
+                className="w-10 h-10 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors duration-300 group"
                 aria-label="GitHub"
               >
-                <svg className="w-6 h-6 inline" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.477 2 2 6.484 2 12.012c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.483 0-.237-.009-.868-.013-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.004.07 1.532 1.032 1.532 1.032.892 1.529 2.341 1.088 2.91.832.091-.646.35-1.088.636-1.34-2.221-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.338 1.909-1.295 2.747-1.025 2.747-1.025.546 1.378.202 2.397.099 2.65.64.7 1.028 1.595 1.028 2.688 0 3.847-2.337 4.695-4.566 4.944.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.579.688.481C19.138 20.175 22 16.427 22 12.012 22 6.484 17.523 2 12 2z"/>
-                </svg>
-              </a>
-              <a
-                href="mailto:saishghatol100@gmail.com"
-                className="hover:text-gray-100"
-                aria-label="Email"
-              >
-                <svg className="w-6 h-6 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                </svg>
+                <Github className="w-5 h-5 text-slate-400 group-hover:text-white" />
               </a>
               <a
                 href="https://twitter.com/saishghatol"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-blue-400"
+                className="w-10 h-10 bg-slate-800 hover:bg-blue-600 rounded-lg flex items-center justify-center transition-colors duration-300 group"
                 aria-label="Twitter"
               >
-                <svg className="w-6 h-6 inline" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23 3a10.9 10.9 0 01-3.14 1.53A4.48 4.48 0 0022.4.36a9.09 9.09 0 01-2.88 1.1A4.52 4.52 0 0016.11 0c-2.53 0-4.59 2.06-4.59 4.59 0 .36.04.71.11 1.05A12.94 12.94 0 013 1.13a4.52 4.52 0 001.4 6.06A4.48 4.48 0 012.8 6.7v.06c0 2.22 1.58 4.07 3.7 4.49a4.52 4.52 0 01-2.07.08c.58 1.81 2.26 3.13 4.25 3.17A9.06 9.06 0 012 19.54a12.8 12.8 0 006.95 2.03c8.34 0 12.9-6.91 12.9-12.9 0-.2 0-.39-.01-.58A9.22 9.22 0 0023 3z"/>
-                </svg>
+                <Twitter className="w-5 h-5 text-slate-400 group-hover:text-white" />
+              </a>
+              <a
+                href="https://linkedin.com/in/saish-ghatol"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 bg-slate-800 hover:bg-blue-700 rounded-lg flex items-center justify-center transition-colors duration-300 group"
+                aria-label="LinkedIn"
+              >
+                <Linkedin className="w-5 h-5 text-slate-400 group-hover:text-white" />
+              </a>
+              <a
+                href="mailto:saishghatol100@gmail.com"
+                className="w-10 h-10 bg-slate-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors duration-300 group"
+                aria-label="Email"
+              >
+                <Mail className="w-5 h-5 text-slate-400 group-hover:text-white" />
               </a>
             </div>
           </div>
 
-          {/* Footer Links */}
-          <div className="flex-1 flex flex-col items-center md:items-end text-center">
-            <div className="text-lg font-semibold mb-3 text-purple-200 ">Quick Links</div>
-            <div className="flex flex-wrap justify-center md:justify-end gap-4">
-              <Link to="/terms" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 px-3 py-1 rounded bg-blue-950 bg-opacity-40">
-                Terms of Service
-              </Link>
-              <Link to="/privacy" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 px-3 py-1 rounded bg-blue-950 bg-opacity-40">
-                Privacy Policy
-              </Link>
-              <Link to="/contact" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 px-3 py-1 rounded bg-blue-950 bg-opacity-40">
-                Contact Us
-              </Link>
-              <Link to="/faq" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 px-3 py-1 rounded bg-blue-950 bg-opacity-40">
-                FAQ
-              </Link>
-              <Link to="/about" className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 px-3 py-1 rounded bg-blue-950 bg-opacity-40">
-                About Us
-              </Link>
+          {/* Quick Links */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-6 relative">
+              Quick Links
+              <div className="w-12 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400 mt-2"></div>
+            </h3>
+            <ul className="space-y-3">
+              {['Home', 'About Us', 'Quiz Categories', 'FAQ', 'Contact'].map((item, index) => (
+                <li key={item}>
+                  <a
+                    href={`/${item.toLowerCase().replace(' ', '-')}`}
+                    className="text-slate-300 hover:text-white transition-colors duration-300 text-sm flex items-center gap-2 group"
+                  >
+                    <div className="w-1 h-1 bg-slate-500 rounded-full group-hover:bg-blue-400 transition-colors duration-300"></div>
+                    {item}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+    {/* Contact Information */}
+<div>
+  <h3 className="text-lg font-semibold text-white mb-6 relative">
+    Contact Us
+    <div className="w-12 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400 mt-2"></div>
+  </h3>
+
+  <div className="space-y-4">
+    <div className="flex items-start gap-3">
+      <MapPin className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+      <div className="text-sm text-slate-300">
+        <div>ABC, XYZ India</div>
+        <div>Digital Learning Hub</div>
+      </div>
+    </div>
+
+    <div className="flex items-center gap-3">
+      <a
+        href="tel:+919876543210"
+        aria-label="Call +91 98765 43210"
+        className="flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+      >
+        <Phone className="w-5 h-5 text-blue-400 flex-shrink-0" />
+        <span className="text-sm text-slate-300">+91 98765 43210</span>
+      </a>
+    </div>
+
+    <div className="flex items-center gap-3">
+      <a
+        href="mailto:saishghatol100@gmail.com"
+        aria-label="Email saishghatol100 at gmail dot com"
+        className="flex items-center gap-3 focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+      >
+        <Mail className="w-5 h-5 text-blue-400 flex-shrink-0" />
+        <span className="text-sm text-slate-300">saishghatol100@gmail.com</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+          {/* Developer Info & Status */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-6 relative">
+              Developer Info
+              <div className="w-12 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400 mt-2"></div>
+            </h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-slate-300">We're Online</span>
+              </div>
+              
+              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+                <div className="text-sm text-slate-300 mb-2">Made with ❤️ by</div>
+                <a
+                  href="https://linkedin.com/in/saish-ghatol"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-blue-400 hover:text-blue-300 transition-colors duration-300 flex items-center gap-1"
+                >
+                  Saish Ghatol
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              
+              <div className="text-xs text-slate-400 space-y-1">
+                <div className="flex justify-between">
+                  <span>Built with:</span>
+                  <span className="text-slate-300">React & Tailwind</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Last updated:</span>
+                  <span className="text-slate-300">{new Date().toLocaleDateString()}</span>
+                </div>
+              </div>
+              
               <a
                 href="https://github.com/saishghatol/quiz-portal"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-blue-300 transition duration-300 ease-in-out transform hover:scale-105 px-3 py-1 rounded bg-blue-950 bg-opacity-40"
+                className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors duration-300 bg-slate-800/30 px-3 py-2 rounded-lg border border-slate-700/50 hover:border-purple-500/50 w-full justify-center"
               >
-                GitHub Repo
+                <Github className="w-4 h-4" />
+                View Source Code
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Bottom */}
+      <div className="border-t border-slate-700/50 bg-slate-900/50">
+        <div className="container mx-auto px-6 py-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="text-sm text-slate-400">
+              © 2025 Quiz Portal. All rights reserved.
+            </div>
+            
+            <div className="flex gap-6 text-sm">
+              <a href="/privacy" className="text-slate-400 hover:text-white transition-colors duration-300">
+                Privacy Policy
+              </a>
+              <a href="/terms" className="text-slate-400 hover:text-white transition-colors duration-300">
+                Terms of Service
               </a>
             </div>
           </div>
