@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import AuthContext from '../../contexts/AuthContext';
+import { ThemeContext } from '../layout/theme';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -9,6 +10,8 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+    const { isDay } = useContext(ThemeContext);
   
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -35,9 +38,19 @@ const Register = () => {
   };
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-xl overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 py-6">
+    // bg-gradient-to-r from-blue-50 to-indigo-100 
+    // This is hardcoded background which doesnt allow change of colors during toggling, instead of this added variable color suitable for toggling effect
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-500"
+    style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      <div className="max-w-md w-full bg-white rounded-xl shadow-xl overflow-hidden transition-colors duration-500"
+        style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
+          {/* ⬆️handles toggling for credentials entering section ⬆️*/}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 py-6"
+        style={{
+            background: 'linear-gradient(to right, var(--cta-gradient-from), var(--cta-gradient-to))',
+            color: 'var(--button-text)'
+          }}>
+            {/* ⬆️handles toggling for upper Create Account Join us Today portion initailly in light purple⬆️ */}
           <h2 className="text-center text-3xl font-extrabold text-white">Create Account</h2>
           <p className="mt-2 text-center text-sm text-blue-100">
             Join us today
@@ -137,7 +150,8 @@ const Register = () => {
           </form>
         </div>
         
-        <div className="px-4 py-6 bg-gray-50 border-t border-gray-200 sm:px-10">
+        <div className="px-4 py-6 sm:px-10 transition-colors duration-500"
+        style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
           <p className="text-xs leading-5 text-gray-500">
             Already have an account?{' '}
             <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 transition duration-150 ease-in-out">
