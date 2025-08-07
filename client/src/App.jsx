@@ -1,9 +1,9 @@
-// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './components/layout/theme';
 import { ToastContainer } from 'react-toastify';
- import 'react-toastify/dist/ReactToastify.css';
+import 'react-toastify/dist/ReactToastify.css';
 
 // Layout components
 import Navbar from './components/layout/Navbar';
@@ -42,54 +42,56 @@ import QuizStatistics from './components/admin/QuizStatistics';
 
 const App = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="flex flex-col min-h-screen">
-          <Navbar />
-          <main className="flex-grow container mx-auto px-4 py-6 pt-16">
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<Home />} />
-              <Route path="/quizzes" element={<QuizList />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              
-              {/* Protected Routes */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/dashboard" element={<div className="container mx-auto px-4 py-6"><Dashboard /></div>} />
-                <Route path="/profile" element={<div className="container mx-auto px-4 py-6"><Profile /></div>} />
-                <Route path="/my-attempts" element={<div className="container mx-auto px-4 py-6"><UserAttempts /></div>} />
-                <Route path="/attempts/:id" element={<div className="container mx-auto px-4 py-6"><AttemptDetail /></div>} />
-                <Route path="/quiz/:id" element={<div className="container mx-auto px-4 py-6"><QuizDetail /></div>} />
-                <Route path="/quiz/:id/take" element={<div className="container mx-auto px-4 py-6"><TakeQuiz /></div>} />
-                <Route path="/quiz/results/:attemptId" element={<div className="container mx-auto px-4 py-6"><QuizResults /></div>} />
-              </Route>
-              
-              {/* Admin Routes */}
-               <Route element={<AdminRoute />}>
-                <Route path="/admin" element={<div className="container mx-auto px-4 py-6"><AdminDashboard /></div>} />
-                <Route path="/admin/quizzes" element={<div className="container mx-auto px-4 py-6"><ManageQuizzes /></div>} />
-                <Route path="/admin/quizzes/create" element={<div className="container mx-auto px-4 py-6"><CreateQuiz /></div>} />
-                <Route path="/admin/quizzes/:id/edit" element={<div className="container mx-auto px-4 py-6"><EditQuiz /></div>} />
-                <Route path="/admin/quizzes/:id/questions" element={<div className="container mx-auto px-4 py-6"><ManageQuestions /></div>} />
-                <Route path="/admin/quizzes/:id/statistics" element={<div className="container mx-auto px-4 py-6"><QuizStatistics /></div>} />
-                <Route path="/admin/users" element={<div className="container mx-auto px-4 py-6"><ManageUsers /></div>} />
-              </Route> 
-              
-              <Route path="/terms" element={<div className="container mx-auto px-4 py-6"><TermsPage /></div>} />
-            <Route path="/privacy" element={<div className="container mx-auto px-4 py-6"><PrivacyPage /></div>} />
-            <Route path="/contact" element={<div className="container mx-auto px-4 py-6"><ContactPage /></div>} />
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <div className="flex flex-col min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+            <Navbar />
+            <main className="flex-grow container mx-auto px-4 py-6 pt-16">
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/" element={<Home />} />
+                <Route path="/quizzes" element={<QuizList />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
-    
-          
-          </main>
-          <Footer />
-        </div>
-      </Router>
-      <ToastContainer position="top-right" autoClose={3000} />
-    </AuthProvider>
+                {/* Protected Routes */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/dashboard" element={<div className="container mx-auto px-4 py-6"><Dashboard /></div>} />
+                  <Route path="/profile" element={<div className="container mx-auto px-4 py-6"><Profile /></div>} />
+                  <Route path="/my-attempts" element={<div className="container mx-auto px-4 py-6"><UserAttempts /></div>} />
+                  <Route path="/attempts/:id" element={<div className="container mx-auto px-4 py-6"><AttemptDetail /></div>} />
+                  <Route path="/quiz/:id" element={<div className="container mx-auto px-4 py-6"><QuizDetail /></div>} />
+                  <Route path="/quiz/:id/take" element={<div className="container mx-auto px-4 py-6"><TakeQuiz /></div>} />
+                  <Route path="/quiz/results/:attemptId" element={<div className="container mx-auto px-4 py-6"><QuizResults /></div>} />
+                </Route>
+
+                {/* Admin Routes */}
+                <Route element={<AdminRoute />}>
+                  <Route path="/admin" element={<div className="container mx-auto px-4 py-6"><AdminDashboard /></div>} />
+                  <Route path="/admin/quizzes" element={<div className="container mx-auto px-4 py-6"><ManageQuizzes /></div>} />
+                  <Route path="/admin/quizzes/create" element={<div className="container mx-auto px-4 py-6"><CreateQuiz /></div>} />
+                  <Route path="/admin/quizzes/:id/edit" element={<div className="container mx-auto px-4 py-6"><EditQuiz /></div>} />
+                  <Route path="/admin/quizzes/:id/questions" element={<div className="container mx-auto px-4 py-6"><ManageQuestions /></div>} />
+                  <Route path="/admin/quizzes/:id/statistics" element={<div className="container mx-auto px-4 py-6"><QuizStatistics /></div>} />
+                  <Route path="/admin/users" element={<div className="container mx-auto px-4 py-6"><ManageUsers /></div>} />
+                </Route>
+
+                {/* Footer Pages */}
+                <Route path="/terms" element={<div className="container mx-auto px-4 py-6"><TermsPage /></div>} />
+                <Route path="/privacy" element={<div className="container mx-auto px-4 py-6"><PrivacyPage /></div>} />
+                <Route path="/contact" element={<div className="container mx-auto px-4 py-6"><ContactPage /></div>} />
+
+                {/* Fallback Route */}
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+            </main>
+            <Footer />
+          </div>
+        </Router>
+        <ToastContainer position="top-right" autoClose={3000} />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

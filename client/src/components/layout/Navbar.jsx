@@ -1,6 +1,8 @@
 import React, { useContext, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
+import ToggleButton from './button'
+import { ThemeContext } from './theme'
 
 const Navbar = () => {
   const { currentUser, logout, isAdmin } = useContext(AuthContext);
@@ -25,9 +27,12 @@ const Navbar = () => {
   const getUserAvatar = (name) => {
     return `https://api.dicebear.com/7.x/initials/svg?seed=${name}`;
   };
+
+  const { isDay } = useContext(ThemeContext);
   
   return (
-    <nav className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg fixed top-0 left-0 w-full z-50 bg-white shadow-md">
+    <nav className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg fixed top-0 left-0 w-full z-50 bg-white shadow-md `p-4 flex justify-between items-center transition-colors duration-500 ${
+        isDay ? 'bg-gray-100 text-black' : 'bg-gray-900 text-white'">
       <div className="container mx-auto px-4 py-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center">
@@ -40,6 +45,9 @@ const Navbar = () => {
           </div>
           
           {/* Desktop Navigation */}
+          {/* Contributor: 6vam4arya */}
+          {/* Adding toggle button */}
+          <ToggleButton/>
           <div className="hidden md:flex items-center space-x-4">
             <Link to="/quizzes" className="px-3 py-2 rounded-md hover:bg-blue-500 hover:bg-opacity-50 transition duration-150">Explore Quizzes</Link>
             
