@@ -1,0 +1,53 @@
+.toggle-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  width: 208px;
+  border-radius: 9999px;
+  padding: 4px;
+  transition: all 0.5s ease-in-out;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.toggle-button.light-mode {
+  background-color: rgba(229, 231, 235, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.toggle-button.dark-mode {
+  background: linear-gradient(to right, #6366f1, #a855f7, #ec4899);
+}
+
+.toggle-thumb {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  height: 40px;
+  width: 40px;
+  border-radius: 9999px;
+  transition: all 0.5s ease-in-out;
+}
+
+.toggle-button.light-mode .toggle-thumb {
+  transform: translateX(0);
+  background-color: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+}
+
+.toggle-button.dark-mode .toggle-thumb {
+  transform: translateX(160px);
+  background-color: white;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.toggle-text {
+  width: 100%;
+  text-align: center;
+  z-index: 10;
+  color: var(--text-secondary);
+}
