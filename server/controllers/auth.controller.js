@@ -154,10 +154,11 @@ exports.updateProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
-    // Update fields
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (profilePicture) user.profilePicture = profilePicture;
+  // Update fields
+  if (name) user.name = name;
+  if (email) user.email = email;
+  // Always update profilePicture, even if empty string
+  if (typeof profilePicture !== 'undefined') user.profilePicture = profilePicture;
     
     await user.save();
     

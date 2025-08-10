@@ -22,8 +22,11 @@ const Navbar = () => {
   };
 
   // Get user avatar
-  const getUserAvatar = (name) => {
-    return `https://api.dicebear.com/7.x/initials/svg?seed=${name}`;
+  const getUserAvatar = (user) => {
+    if (user?.profilePicture) {
+      return user.profilePicture;
+    }
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${user?.name || ''}`;
   };
   
   return (
@@ -60,7 +63,7 @@ const Navbar = () => {
                     <div className="flex items-center space-x-2">
                       <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-800 font-medium overflow-hidden">
                         <img 
-                          src={getUserAvatar(currentUser.name)}
+                          src={getUserAvatar(currentUser)}
                           alt={currentUser.name}
                           className="w-full h-full object-cover"
                         />
@@ -77,7 +80,7 @@ const Navbar = () => {
                       <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-800 font-medium overflow-hidden">
                         <img 
-                          src={getUserAvatar(currentUser.name)}
+                          src={getUserAvatar(currentUser)}
                           alt={currentUser.name}
                           className="w-full h-full object-cover"
                         />
@@ -151,7 +154,7 @@ const Navbar = () => {
                   <div className="flex items-center px-3 py-2">
                     <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
                       <img 
-                        src={getUserAvatar(currentUser.name)}
+                        src={getUserAvatar(currentUser)}
                         alt={currentUser.name}
                         className="w-full h-full object-cover"
                       />
