@@ -1,581 +1,431 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { Loader } from "lucide-react";
+import { Loader, AlertTriangle, SearchX, ArrowLeft, Award, CheckCircle2, XCircle, Clock, ChevronDown, BarChart3, Repeat, Printer, Star } from "lucide-react";
+import confetti from 'canvas-confetti';
+import { useReactToPrint } from 'react-to-print';
+// +++ NEW: Import social sharing components +++
+import {
+  FacebookShareButton,
+  TwitterShareButton,
+  LinkedinShareButton,
+  WhatsappShareButton,
+  FacebookIcon,
+  TwitterIcon,
+  LinkedinIcon,
+  WhatsappIcon
+} from 'react-share';
+
+
+// +++ NEW: Custom hook for animating numbers +++
+const useCountUp = (end, duration = 1500) => {
+  const [count, setCount] = useState(0);
+  const frameRate = 1000 / 60;
+  const totalFrames = Math.round(duration / frameRate);
+
+  useEffect(() => {
+    let frame = 0;
+    const counter = setInterval(() => {
+      frame++;
+      const progress = (frame / totalFrames);
+      // Ease-out quint function for a smoother animation
+      const easedProgress = 1 - Math.pow(1 - progress, 5);
+      setCount(Math.round(end * easedProgress));
+
+      if (frame === totalFrames) {
+        clearInterval(counter);
+      }
+    }, frameRate);
+
+    return () => clearInterval(counter);
+  }, [end, duration, totalFrames]);
+
+  return count;
+};
+
+// --- Enhanced Certificate Component ---
+const Certificate = ({ quizTitle, userName, scorePercentage, completionDate, onBack }) => {
+  const certificateRef = useRef(null);
+
+  // Fixed: Properly configure react-to-print with custom styles
+  const handlePrint = useReactToPrint({
+    contentRef: certificateRef,
+    documentTitle: `${userName} - ${quizTitle} Certificate`,
+    pageStyle: `
+      @page {
+        size: A4 landscape;
+        margin: 0.5in;
+      }
+      @media print {
+        body { 
+          -webkit-print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+      }
+    `,
+  });
+
+  const formattedDate = new Date(completionDate).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  return (
+    <div className="bg-gray-950 min-h-screen py-12 px-4 flex flex-col items-center justify-center animate-fade-in">
+      {/* Buttons - NOT included in print */}
+      <div className="w-full max-w-5xl mx-auto flex justify-between items-center mb-8 print:hidden">
+        <button onClick={onBack} className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 font-semibold transition-all transform hover:scale-105">
+          <ArrowLeft size={16} />
+          Back to Results
+        </button>
+        <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-all transform hover:scale-105">
+          <Printer size={16} />
+          Print / Download PDF
+        </button>
+      </div>
+
+      {/* Certificate - ONLY this div will be printed */}
+      <div 
+        ref={certificateRef} 
+        className="bg-white border-4 border-yellow-500 p-12 max-w-4xl w-full aspect-[1.414/1] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden print:shadow-none print:max-w-none print:w-full print:h-full print:aspect-auto"
+        style={{
+          background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+          printColorAdjust: 'exact',
+          WebkitPrintColorAdjust: 'exact'
+        }}
+      >
+        {/* Background decoration */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-8 left-8 text-6xl text-yellow-500">★</div>
+          <div className="absolute top-8 right-8 text-6xl text-yellow-500">★</div>
+          <div className="absolute bottom-8 left-8 text-6xl text-yellow-500">★</div>
+          <div className="absolute bottom-8 right-8 text-6xl text-yellow-500">★</div>
+        </div>
+        
+        {/* Certificate content */}
+        <div className="flex items-center gap-4 text-yellow-600 z-10 mb-8">
+          <Star size={32} />
+          <h1 className="text-4xl font-serif font-bold text-gray-800">Certificate of Achievement</h1>
+          <Star size={32} />
+        </div>
+        
+        <p className="text-xl text-gray-600 z-10 mb-6">This certificate is proudly presented to</p>
+        <p className="text-5xl font-extrabold text-gray-800 my-8 font-sans z-10 border-b-2 border-yellow-500 pb-4">{userName}</p>
+        <p className="text-xl text-gray-600 z-10 mb-2">for successfully completing the quiz</p>
+        <p className="text-3xl font-bold text-yellow-600 mt-2 z-10 mb-8">{quizTitle}</p>
+        <p className="text-lg text-gray-600 z-10">
+          with a score of <span className="font-bold text-gray-800 text-xl">{scorePercentage}%</span> on <span className="font-bold text-gray-800">{formattedDate}</span>
+        </p>
+        
+        <div className="mt-16 w-full flex justify-center z-10">
+          <div className="text-center">
+            <div className="border-t-2 border-gray-400 pt-2 px-12">
+              <p className="text-lg font-semibold text-gray-800">Quiz Portal</p>
+              <p className="text-sm text-gray-500">Authorized Issuer</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const QuizResults = () => {
-  const {attemptId } = useParams();
+  const { attemptId } = useParams();
   const [attempt, setAttempt] = useState(null);
   const [quiz, setQuiz] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
-  const [timeRequired, setTimeRequired] = useState(null);
+  const [showCertificate, setShowCertificate] = useState(false);
+
+  const PASSING_SCORE = 80;
 
   useEffect(() => {
     const fetchAttemptDetails = async () => {
       setLoading(true);
       try {
         const response = await api.get(`/quizzes/attempts/${attemptId}`);
-        // Set attempt data
         setAttempt(response.data.attempt);
-        // Set quiz data
         setQuiz(response.data.quiz);
-        // Set questions data
-        if (response.data.quiz && response.data.quiz.questions) {
-          setQuestions(response.data.quiz.questions);
-        }
-        // Calculate time required to complete the quiz
-        if (response.data.attempt) {
-          calculateTimeTaken(response.data.attempt);
-        }
+        setQuestions(response.data.quiz?.questions || []);
         setError(null);
-      } catch (error) {
-        setError('Failed to load quiz results. Please try again later.');
+      } catch (err) {
+        console.error("Error fetching results:", err);
+        setError('Failed to load quiz results. The attempt may not exist or an error occurred.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchAttemptDetails();
   }, [attemptId]);
 
-  // Improved time calculation logic to handle missing completedAt
-  const calculateTimeTaken = (attemptData, timeLimit = null) => {
-    if (!attemptData) {
-      setTimeRequired(null);
-      return;
-    }
-  
-    const { startedAt, completedAt, timedOut } = attemptData;
-  
-    // If we don't have a valid startedAt, we can't calculate time
-    if (!startedAt || typeof startedAt !== 'string') {
-      console.warn('Missing or invalid startedAt value:', {
-        hasStartedAt: !!startedAt,
-        startedAtValue: startedAt
+  const scorePercentage = attempt?.maxScore > 0 ? Math.round((attempt.score / attempt.maxScore) * 100) : 0;
+  const hasPassed = scorePercentage >= PASSING_SCORE;
+
+  // +++ NEW: Trigger confetti on pass +++
+  useEffect(() => {
+    if (!loading && hasPassed) {
+      confetti({
+        particleCount: 150,
+        spread: 90,
+        origin: { y: 0.6 },
+        zIndex: 1000,
       });
-      setTimeRequired(null);
-      return;
     }
-  
-    try {
-      const startTime = new Date(startedAt);
-  
-      // Validate start time
-      if (isNaN(startTime.getTime())) {
-        throw new Error('Invalid date value: startedAt cannot be parsed');
-      }
-  
-      // Determine end time based on various conditions
-      let endTime;
-      
-      // Case 1: If the attempt timed out and we have a time limit, use that exact time
-      if (timedOut && timeLimit) {
-        // Calculate the exact end time based on the time limit
-        endTime = new Date(startTime.getTime() + timeLimit);
-      }
-      // Case 2: If we have a completedAt timestamp, use that
-      else if (completedAt) {
-        endTime = new Date(completedAt);
-        
-        // Validate the endTime
-        if (isNaN(endTime.getTime())) {
-          throw new Error('Invalid date value: completedAt cannot be parsed');
-        }
-      }
-      // Case 3: Otherwise, use current time
-      else {
-        endTime = new Date();
-      }
-  
-      // Calculate time difference in milliseconds
-      const timeDiffMs = endTime - startTime;
-  
-      // Ensure we always have a non-negative time
-      // Instead of using absolute value (which can hide errors),
-      // log a warning if we get an unexpected negative time
-      if (timeDiffMs < 0) {
-        console.warn('Negative time calculation detected:', {
-          startTime,
-          endTime,
-          timeDiffMs
-        });
-        // Only in extreme edge cases, use a fallback value or zero
-        // depending on your application needs
-        setTimeRequired(0);
-      } else {
-        setTimeRequired(timeDiffMs);
-      }
-      
-      // Optionally return the calculated value for testing or additional processing
-      return timeDiffMs;
-    } catch (error) {
-      console.error('Error calculating time taken:', error);
-      setTimeRequired(null);
-      return null;
-    }
-  };
+  }, [loading, hasPassed]);
 
-  const toggleShowAnswers = () => {
-    setShowAnswers(prev => !prev);
-  };
-
-  const getScoreBadgeColor = (score) => {
-    if (!attempt || !attempt.maxScore) return 'bg-gray-100 text-gray-800';
-    const percentage = (score / attempt.maxScore) * 100;
-    if (percentage >= 80) return 'bg-green-600 text-white';
-    if (percentage >= 60) return 'bg-blue-600 text-white';
-    if (percentage >= 40) return 'bg-yellow-600 text-white';
-    return 'bg-red-600 text-white';
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'In progress';
-
-    const options = {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-
-    try {
-      return new Date(dateString).toLocaleDateString(undefined, options);
-    } catch (error) {
-      return 'Invalid date';
-    }
-  };
-
-  const calculatePercentage = () => {
-    if (!attempt || !attempt.maxScore || attempt.maxScore === 0) return 0;
-    return Math.round((attempt.score / attempt.maxScore) * 100);
-  };
-
-  // Improved time formatting function
-  const formatTimeDisplay = (timeInMs) => {
-    if (timeInMs === null || timeInMs === undefined || isNaN(timeInMs)) {
-      return 'N/A';
-    }
-
-    // Convert to seconds
-    const seconds = Math.floor(timeInMs / 1000);
-
-    // Handle hours, minutes, seconds for better human readability
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-
-    const parts = [];
-
-    // Only include hours if there are any
-    if (hours > 0) {
-      parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
-    }
-
-    // Only include minutes if there are any or if we're showing hours
-    if (minutes > 0 || hours > 0) {
-      parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
-    }
-
-    // Always include seconds unless we have hours and no seconds
-    if (remainingSeconds > 0 || parts.length === 0 || (hours === 0)) {
-      parts.push(`${remainingSeconds} second${remainingSeconds !== 1 ? 's' : ''}`);
-    }
-
-    return parts.join(' ');
-  };
-
-  // Updated findSelectedOptionText function
-  const findSelectedOptionText = (questionId, questionOptions) => {
-    if (!attempt || !attempt.answers) return 'No answer';
-
-    const answer = attempt.answers.find(a => a.questionId === questionId);
-    if (!answer) return 'No answer';
-
-    // It means the answer was provided but we don't have the text
-    if (!answer.selectedAnswer && answer.isCorrect) {
-      return 'Correct answer';
-    }
-
-    if (!answer.selectedAnswer) return 'No answer';
-
-    if (!Array.isArray(questionOptions) || questionOptions.length === 0) {
-      return `(${answer.selectedAnswer})`;
-    }
-
-    const selectedOption = questionOptions.find(opt => opt._id === answer.selectedAnswer);
-    return selectedOption ? selectedOption.text : `${answer.selectedAnswer}`;
-  };
-
-  // Handle JSX attributes properly
-  const getPath = (showState) => {
-    return showState ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7";
-  };
+  // +++ NEW: Animated stats +++
+  const animatedScore = useCountUp(scorePercentage);
+  const correctAnswers = attempt?.answers.filter(a => a.isCorrect).length || 0;
+  const animatedCorrect = useCountUp(correctAnswers);
+  const incorrectAnswers = (attempt?.answers.length || 0) - correctAnswers;
+  const animatedIncorrect = useCountUp(incorrectAnswers);
+  const animatedPoints = useCountUp(attempt?.score || 0);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-64 bg-white rounded-lg shadow-md">
-        <div className="text-center p-10">
-          <Loader className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading your quiz...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-gray-500">
+        <Loader className="animate-spin h-8 w-8 mb-4" />
+        <p className="font-semibold text-lg">Calculating Your Results...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-          <div className="text-red-500 mb-4 flex justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-center mb-4">Error Loading Results</h2>
-          <p className="text-gray-600 text-center mb-6">{error}</p>
-          <div className="flex justify-center">
-            <Link to="/quizzes" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium">
-              Back to Quizzes
-            </Link>
-          </div>
-        </div>
+      <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+        <AlertTriangle className="h-12 w-12 text-red-500/50 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-white mb-2">Error Loading Results</h3>
+        <p className="text-gray-500 mb-6">{error}</p>
+        <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
+          <ArrowLeft size={16} />
+          Back to Quizzes
+        </Link>
       </div>
+    </div>
     );
   }
 
   if (!attempt) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-          <div className="text-yellow-500 mb-4 flex justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-center mb-4">No Data Found</h2>
-          <p className="text-gray-600 text-center mb-6">We couldn't find any quiz attempt data. The quiz might have been deleted or is unavailable.</p>
-          <div className="flex justify-center">
-            <Link to="/quizzes" className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium">
-              Back to Quizzes
-            </Link>
-          </div>
-        </div>
+    return (   <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+        <SearchX className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-white mb-2">Attempt Not Found</h3>
+        <p className="text-gray-500 mb-6">We couldn't find any data for this quiz attempt.</p>
+        <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
+          <ArrowLeft size={16} />
+          Back to Quizzes
+        </Link>
       </div>
+    </div>);
+  }
+
+  // +++ NEW: Social Sharing configuration +++
+  const shareUrl = window.location.href;
+  const shareTitle = `I scored ${scorePercentage}% on the "${quiz.title}" quiz! Challenge me!`;
+  const shareHashtags = ['QuizChallenge', quiz.title.replace(/\s+/g, '')];
+
+  const timeTakenMs = new Date(attempt.completedAt) - new Date(attempt.startedAt);
+  
+  const formatTime = (ms) => {
+    if (isNaN(ms) || ms < 0) return 'N/A';
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${seconds}s`;
+  };
+
+  const getOptionText = (questionId, optionId) => {
+    const question = questions.find(q => q._id === questionId);
+    if (!question || !question.options) return 'N/A';
+    const option = question.options.find(o => o._id === optionId);
+    return option ? option.text : 'N/A';
+  };
+
+  const getCorrectOptionText = (questionId) => {
+    const question = questions.find(q => q._id === questionId);
+    if (!question || !question.options) return 'N/A';
+    const correctOption = question.options.find(o => o.isCorrect);
+    return correctOption ? correctOption.text : 'N/A';
+  };
+  
+  if (showCertificate) {
+    return (
+      <Certificate
+        quizTitle={quiz.title}
+        userName="Alex Doe" 
+        scorePercentage={scorePercentage}
+        completionDate={attempt.completedAt}
+        onBack={() => setShowCertificate(false)}
+      />
     );
   }
 
-  // Ensure we have an answers array
-  const answers = attempt.answers || [];
-
-  const scorePercentage = calculatePercentage();
-  const isPassed = scorePercentage >= (quiz?.passScore || 0);
-  const quizTitle = quiz?.title || 'Quiz Results';
-
-  // Check if we need to display the "No questions available" message
-  const noQuestionsAvailable = !questions || questions.length === 0;
-
-  // Check if quiz is still in progress (no completedAt)
-  const isInProgress = !attempt.completedAt;
+  // Determine colors based on score
+  const scoreColor = scorePercentage >= 80 ? 'text-green-400' : scorePercentage >= 50 ? 'text-yellow-400' : 'text-red-400';
+  const scoreStroke = scorePercentage >= 80 ? 'stroke-green-500' : scorePercentage >= 50 ? 'stroke-yellow-500' : 'stroke-red-500';
+  const shadowColor = hasPassed ? 'shadow-green-500/20' : 'shadow-gray-500/10';
 
   return (
-    <div className="bg-gray-50 min-h-screen py-8">
-      <div className="container mx-auto p-4 max-w-4xl">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          {isInProgress && (
-            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-md mb-4 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <div className="max-w-5xl mx-auto px-4 py-8 animate-fade-in">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">{quiz.title}</h1>
+        <p className="mt-2 text-lg text-gray-400">Here's your performance breakdown.</p>
+      </div>
+
+      <div className={`bg-gradient-to-br from-gray-900 to-gray-950 border border-gray-800 rounded-3xl p-6 md:p-8 mb-8 shadow-2xl ${shadowColor} transition-shadow duration-500`}>
+        <div className="grid md:grid-cols-5 gap-8 items-center">
+          <div className="md:col-span-2 flex flex-col items-center justify-center">
+            <div className="relative h-48 w-48">
+              <svg className="h-full w-full" viewBox="0 0 100 100">
+                <defs>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+                    <feMerge>
+                      <feMergeNode in="coloredBlur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <circle cx="50" cy="50" r="45" strokeWidth="10" fill="none" className="stroke-gray-800" />
+                <circle
+                  cx="50" cy="50" r="45" strokeWidth="10" fill="none"
+                  className={`${scoreStroke} transition-all duration-1000 ease-out`}
+                  strokeDasharray={`${(scorePercentage * 2.83)} 283`}
+                  strokeLinecap="round" transform="rotate(-90 50 50)"
+                  style={{ filter: 'url(#glow)' }}
+                />
               </svg>
-              <span>This quiz is still in progress. Time calculations are based on current time.</span>
-            </div>
-          )}
-
-          <h1 className="text-3xl font-bold mb-4 text-gray-800 border-b pb-4">{quizTitle}</h1>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="space-y-4">
-              <div className="flex items-center">
-                <div className="mr-3 text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600">Status: {attempt.completedAt ? 'Completed' : 'In Progress'}</p>
-              </div>
-
-              <div className="flex items-center">
-                <div className="mr-3 text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600">{attempt.completedAt ? 'Completed on:' : 'Started on:'} {formatDate(attempt.completedAt || attempt.startedAt)}</p>
-              </div>
-
-              <div className="flex items-center">
-                <div className="mr-3 text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600">Total questions: {answers.length || 0}</p>
-              </div>
-
-              {quiz?.timeLimit && (
-                <div className="flex items-center">
-                  <div className="mr-3 text-gray-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-600">Time limit: {quiz.timeLimit} minutes</p>
-                </div>
-              )}
-
-              <div className="flex items-center">
-                <div className="mr-3 text-gray-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-gray-600">Time taken: {formatTimeDisplay(timeRequired)} {!attempt.completedAt && ' (so far)'}</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-5xl font-bold text-white drop-shadow-lg">{animatedScore}%</span>
+                <span className="text-sm text-gray-400 mt-1">Score</span>
               </div>
             </div>
-
-            <div className="flex flex-col items-center justify-center bg-gray-50 rounded-lg p-4">
-              <div className="text-center mb-2">
-                <span className={`inline-block px-6 py-3 rounded-full text-xl font-bold ${getScoreBadgeColor(attempt.score)}`}>
-                  {scorePercentage}%
-                </span>
-              </div>
-              <p className="text-lg font-medium mb-2">Score: {attempt.score}/{attempt.maxScore} points</p>
-
-              {quiz?.passScore !== undefined && (
-                <div className="mt-2">
-                  <span className={`inline-block px-4 py-2 rounded-md text-white font-medium ${isPassed ? 'bg-green-600' : 'bg-red-600'}`}>
-                    {isPassed ? 'PASSED' : 'FAILED'}
-                    {isPassed ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    )}
-                  </span>
-                  <p className="text-sm text-gray-500 mt-1">Passing score: {quiz.passScore}%</p>
-                </div>
-              )}
+             <p className={`mt-4 text-2xl font-semibold ${scoreColor}`}>
+              {scorePercentage >= 80 ? "Excellent Work! 🎉" : scorePercentage >= 50 ? "Good Effort!" : "Keep Practicing!"}
+            </p>
+          </div>
+          <div className="md:col-span-3 grid grid-cols-2 gap-4">
+            <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-green-500/50 hover:bg-gray-800/50">
+              <div className="flex items-center gap-3 text-green-400 mb-2"><CheckCircle2 size={20} /> <span className="text-sm font-medium text-gray-400">Correct</span></div>
+              <p className="font-semibold text-3xl text-white">{animatedCorrect} <span className="text-base text-gray-500">/{questions.length}</span></p>
+            </div>
+             <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-red-500/50 hover:bg-gray-800/50">
+              <div className="flex items-center gap-3 text-red-400 mb-2"><XCircle size={20} /> <span className="text-sm font-medium text-gray-400">Incorrect</span></div>
+              <p className="font-semibold text-3xl text-white">{animatedIncorrect} <span className="text-base text-gray-500">/{questions.length}</span></p>
+            </div>
+             <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-yellow-500/50 hover:bg-gray-800/50">
+              <div className="flex items-center gap-3 text-yellow-400 mb-2"><Award size={20} /> <span className="text-sm font-medium text-gray-400">Points</span></div>
+              <p className="font-semibold text-3xl text-white">{animatedPoints} <span className="text-base text-gray-500">/{attempt.maxScore}</span></p>
+            </div>
+             <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-blue-500/50 hover:bg-gray-800/50">
+              <div className="flex items-center gap-3 text-blue-400 mb-2"><Clock size={20} /> <span className="text-sm font-medium text-gray-400">Time</span></div>
+              <p className="font-semibold text-3xl text-white">{formatTime(timeTakenMs)}</p>
             </div>
           </div>
-          <div className="flex justify-center mt-4">
-            <button
-              onClick={toggleShowAnswers}
-              className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-            >
-              {showAnswers ? 'Hide Answers' : 'Show Answers'}
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={getPath(showAnswers)} />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {showAnswers && (
-          <div className="space-y-6">
-            {noQuestionsAvailable ? (
-              answers.length > 0 ? (
-                answers.map((answer, index) => {
-                  const isCorrect = answer?.isCorrect === true;
-
-                  return (
-                    <div key={answer.questionId || index} className={`bg-white rounded-lg shadow-md overflow-hidden border-l-4 ${isCorrect ? 'border-green-500' : 'border-red-500'}`}>
-                      <div className="p-5">
-                        <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-start">
-                          <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-800 mr-3">
-                            {index + 1}
-                          </span>
-                          <span>Question {index + 1}</span>
-                        </h3>
-
-                        <div className="ml-11 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className={`p-3 rounded-md ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                              <p className="text-gray-700 font-medium">Your Answer:</p>
-                              <div className="flex items-center mt-2">
-                                <span className={`mr-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                                  {isCorrect ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  )}
-                                </span>
-                                <span className={isCorrect ? 'text-green-800' : 'text-red-800'}>
-                                  Option ID: {answer.selectedOptionId}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
-                              <p className="text-gray-700 flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                <span className="font-medium">Points earned:</span>
-                                <span className="ml-2 font-bold text-blue-700">
-                                  {answer.pointsEarned || 0} / {answer.maxPoints || 1}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="bg-yellow-50 p-6 rounded-lg border border-yellow-200 text-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-yellow-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <h3 className="text-lg font-medium text-yellow-800 mb-2">No Answer Details Available</h3>
-                  <p className="text-yellow-700">We couldn't load the question details for this quiz. However, your final score is still available.</p>
-                </div>
-              )
-            ) : (
-              questions.map((question, index) => {
-                // Ensure question is valid
-                if (!question) return null;
-
-                // Check if attempt.answers exists before using it
-                const answer = answers.find(a => a.questionId === question._id);
-
-                // Handle case where question.options might be undefined
-                const options = Array.isArray(question.options) ? question.options : [];
-                const correctOptions = options.filter(opt => opt.isCorrect === true);
-
-                const selectedAnswerText = findSelectedOptionText(question._id, options);
-                const isCorrect = answer?.isCorrect === true;            
-
-                return (
-                  <div key={question._id || index} className={`bg-white rounded-lg shadow-md overflow-hidden border-l-4 ${isCorrect ? 'border-green-500' : 'border-red-500'}`}>
-                    <div className="p-5">
-                      <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-start">
-                        <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-800 mr-3">
-                          {index + 1}
-                        </span>
-                        <span>{question.text}</span>
-                      </h3>
-
-                      <div className="ml-11 space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className={`p-3 rounded-md ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                            <p className="text-gray-700 font-medium">Your Answer:</p>
-                            <div className="flex items-center mt-2">
-                              <span className={`mr-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                                {isCorrect ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                )}
-                              </span>
-                              <span className={isCorrect ? 'text-green-800' : 'text-red-800'}>
-                                {selectedAnswerText}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="p-3 rounded-md bg-green-50 border border-green-200">
-                            <p className="text-gray-700 font-medium">Correct Answer:</p>
-                            <p className="text-green-800 mt-2">
-                              {correctOptions.length > 0
-                                ? correctOptions.map(opt => opt.text).join(', ')
-                                : 'No correct option defined'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {answer && (
-                          <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                            <p className="text-gray-700 flex items-center">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                              </svg>
-                              <span className="font-medium">Points earned:</span>
-                              <span className="ml-2 font-bold text-blue-700">
-                                {answer.pointsEarned || 0} / {question.points || 1}
-                              </span>
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Fixed explanation rendering: */}
-                        {!isCorrect && (
-                          <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
-                            <p className="text-gray-700">
-                              <span className="font-medium flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Explanation:
-                              </span>
-                              <span className="block mt-1 text-gray-600">
-                                {correctOptions.length > 0
-                                  ? `The correct answer is: ${correctOptions.map(opt => opt.text).join(', ')}`
-                                  : 'No explanation available for this question.'
-                                }
-                              </span>
-                            </p>
-                          </div>
-                        )}
-
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        <div className="mt-8 flex flex-wrap gap-4 justify-center">
-          <Link
-            to="/quizzes"
-            className="flex items-center px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors font-medium"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Quizzes
-          </Link>
-
-          {quiz?._id && scorePercentage < 80 && (
-            <Link
-              to={`/quiz/${quiz._id}`}
-              className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Try Again
-            </Link>
-          )}
-
         </div>
       </div>
+
+      <div className="flex justify-center flex-wrap gap-4 mb-10">
+        {hasPassed && (
+          <button onClick={() => setShowCertificate(true)} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg hover:shadow-yellow-500/30">
+            <Award size={18} />
+            View Certificate
+          </button>
+        )}
+        <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg font-semibold transition-all transform hover:scale-105 hover:bg-gray-700">
+          <BarChart3 size={18} />
+          {showAnswers ? 'Hide' : 'Review'} Answers
+          <ChevronDown size={18} className={`transition-transform ${showAnswers ? 'rotate-180' : ''}`} />
+        </button>
+        <Link to={`/quiz/${quiz._id}`} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg font-semibold transition-all transform hover:scale-105 hover:bg-gray-700">
+          <Repeat size={18} />
+          Try Again
+        </Link>
+      </div>
+
+      {/* +++ NEW: Social Sharing Section +++ */}
+      <div className="text-center my-10 animate-fade-in-up">
+        <p className="text-gray-400 font-semibold mb-4">Share Your Achievement!</p>
+        <div className="flex justify-center items-center gap-4">
+          <TwitterShareButton
+            url={shareUrl}
+            title={shareTitle}
+            hashtags={shareHashtags}
+            className="transition-transform transform hover:scale-110"
+          >
+            <TwitterIcon size={40} round />
+          </TwitterShareButton>
+
+          <FacebookShareButton
+            url={shareUrl}
+            quote={shareTitle}
+            hashtag={`#${shareHashtags[0]}`}
+            className="transition-transform transform hover:scale-110"
+          >
+            <FacebookIcon size={40} round />
+          </FacebookShareButton>
+
+          <LinkedinShareButton
+            url={shareUrl}
+            title={shareTitle}
+            summary="Check out my quiz results and try the quiz yourself on this awesome platform!"
+            source="React Quiz App"
+            className="transition-transform transform hover:scale-110"
+          >
+            <LinkedinIcon size={40} round />
+          </LinkedinShareButton>
+
+          <WhatsappShareButton
+            url={shareUrl}
+            title={shareTitle}
+            separator=" :: "
+            className="transition-transform transform hover:scale-110"
+          >
+            <WhatsappIcon size={40} round />
+          </WhatsappShareButton>
+        </div>
+      </div>
+
+      {showAnswers && (
+        <div className="space-y-4 animate-fade-in-up">
+          <h2 className="text-3xl font-bold text-white text-center">Detailed Review</h2>
+          {questions.map((question, index) => {
+            const userAnswer = attempt.answers.find(a => a.questionId === question._id);
+            const isCorrect = userAnswer?.isCorrect || false;
+
+            return (
+              <div key={question._id} className={`bg-gray-950/80 border-l-4 rounded-r-lg p-5 transition-colors ${isCorrect ? 'border-green-500' : 'border-red-500'}`}>
+                <p className="font-semibold text-white mb-4 text-lg">
+                  <span className="text-gray-500 mr-2">{index + 1}.</span>{question.text}
+                </p>
+                <div className="space-y-3 pl-7">
+                  <div className={`border border-transparent p-3 rounded-lg flex items-start gap-3 ${isCorrect ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    {isCorrect ? <CheckCircle2 size={20} className="text-green-400 mt-0.5 flex-shrink-0" /> : <XCircle size={20} className="text-red-400 mt-0.5 flex-shrink-0" />}
+                    <div>
+                      <p className="text-sm font-medium text-gray-400">Your Answer</p>
+                      <p className="text-white text-base">{userAnswer ? getOptionText(question._id, userAnswer.selectedOptionId) : 'Not Answered'}</p>
+                    </div>
+                  </div>
+                  {!isCorrect && (
+                     <div className="border border-transparent p-3 rounded-lg bg-green-500/10 flex items-start gap-3">
+                       <CheckCircle2 size={20} className="text-green-400 mt-0.5 flex-shrink-0" />
+                       <div>
+                         <p className="text-sm font-medium text-gray-400">Correct Answer</p>
+                         <p className="text-white text-base">{getCorrectOptionText(question._id)}</p>
+                       </div>
+                     </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
