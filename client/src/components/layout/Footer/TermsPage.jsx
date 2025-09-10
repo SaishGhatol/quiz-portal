@@ -1,73 +1,77 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowLeft, FileText } from 'lucide-react';
 
-// Terms of Service Page
- const TermsPage = () => {
+const TermsPage = () => {
+  const termsSections = [
+    {
+      title: "1. Acceptance of Terms",
+      content: "By accessing or using the Quiz Portal platform ('Service'), you agree to be bound by these Terms of Service. If you disagree with any part of the terms, then you may not access the Service."
+    },
+    {
+      title: "2. User Accounts",
+      content: "To access certain features of our platform, you may be required to register for an account. You are responsible for safeguarding your account information and for all activities that occur under your account. You must notify us immediately upon becoming aware of any breach of security or unauthorized use of your account."
+    },
+    {
+      title: "3. Content and Conduct",
+      content: "You are responsible for all content you submit, post, or display on the Quiz Portal. You agree not to post content that is illegal, offensive, or infringing on intellectual property rights. We reserve the right to remove any content that violates these terms."
+    },
+    {
+      title: "4. Intellectual Property",
+      content: "The Service and its original content, features, and functionality are and will remain the exclusive property of the Quiz Portal and its licensors. Our trademarks may not be used in connection with any product or service without our prior written consent."
+    },
+    {
+      title: "5. Termination",
+      content: "We may terminate or suspend your account and bar access to the Service immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms."
+    },
+    {
+      title: "6. Changes to Terms",
+      content: "We reserve the right, at our sole discretion, to modify or replace these Terms at any time. We will provide at least 30 days' notice prior to any new terms taking effect. By continuing to access or use our Service after those revisions become effective, you agree to be bound by the revised terms."
+    },
+    {
+      title: "7. Contact Us",
+      content: "If you have any questions about these Terms of Service, please contact us through our official contact channels."
+    }
+  ];
+
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center">
-        <Link 
-              to="/" 
-              className="flex items-center bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors duration-300"
-            >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
+    <>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+      `}</style>
+      <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
+        <header className="mb-8">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft size={16} />
             Back to Home
           </Link>
-        </div>
-        
-        <div className="bg-white shadow-lg rounded-lg p-6 md:p-10">
-          <h1 className="text-3xl font-bold text-gray-800 mb-6 border-b pb-4">Terms of Service</h1>
-          
-          <div className="prose max-w-none">
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">1. Acceptance of Terms</h2>
-            <p className="mb-4">
-              By accessing or using the Quiz Portal platform, you agree to be bound by these Terms of Service. 
-              If you do not agree to these terms, please do not use our service.
+          <h1 className="text-4xl font-bold text-white mt-2 flex items-center gap-3">
+            <FileText size={32} />
+            Terms of Service
+          </h1>
+          <p className="text-gray-500 mt-1">Last Updated: September 3, 2025</p>
+        </header>
+
+        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6 md:p-8">
+          <div className="space-y-8">
+            <p className="text-lg text-gray-300">
+              Please read these Terms of Service carefully before using our platform. Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms.
             </p>
-            
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">2. User Accounts</h2>
-            <p className="mb-4">
-              To access certain features of our platform, you may be required to register for an account. 
-              You are responsible for maintaining the confidentiality of your account information and for 
-              all activities that occur under your account.
-            </p>
-            
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">3. Content and Conduct</h2>
-            <p className="mb-4">
-              Users are responsible for all content they submit, post, or display on the Quiz Portal. 
-              Prohibited content includes but is not limited to: offensive material, copyrighted content 
-              without permission, and any illegal content.
-            </p>
-            
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">4. Intellectual Property</h2>
-            <p className="mb-4">
-              All content, features, and functionality on the Quiz Portal are owned by us or our licensors 
-              and are protected by copyright, trademark, and other intellectual property laws.
-            </p>
-            
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">5. Termination</h2>
-            <p className="mb-4">
-              We reserve the right to terminate or suspend your account and access to our services at our 
-              sole discretion, without notice, for conduct that we believe violates these Terms of Service.
-            </p>
-            
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">6. Changes to Terms</h2>
-            <p className="mb-4">
-              We may revise these Terms of Service at any time by updating this page. By continuing to use 
-              the Quiz Portal after such changes, you agree to the revised terms.
-            </p>
-            
-            <h2 className="text-2xl font-semibold text-gray-700 mt-6 mb-3">7. Contact Us</h2>
-            <p className="mb-4">
-              If you have any questions about these Terms of Service, please contact us through our Contact page.
-            </p>
+            {termsSections.map((section, index) => (
+              <div key={index}>
+                <h2 className="text-2xl font-semibold text-white border-b border-gray-800 pb-3 mb-4">
+                  {section.title}
+                </h2>
+                <p className="text-gray-400 leading-relaxed">
+                  {section.content}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

@@ -1,445 +1,221 @@
-import React, { useState, useEffect } from 'react';
-import { Link ,useParams} from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { 
-  BarChart, Filter, Trophy, Clock, ArrowDownUp, 
-  BookOpen, CheckCircle, FileSpreadsheet, Calendar, 
-  Eye, RefreshCw, PlusCircle, Search, X, Tag, Loader
+  BarChart2, Trophy, Clock,
+  BookOpen, CheckCircle, FileSpreadsheet,
+  PlusCircle, Search, ChevronDown, Loader, AlertTriangle
 } from 'lucide-react';
 
+// A reusable, interactive card with the mouse-tracking aurora effect
+const Card = ({ children, className = '', style }) => {
+  const cardRef = useRef(null);
+  const handleMouseMove = (e) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    cardRef.current.style.setProperty('--mouse-x', `${x}px`);
+    cardRef.current.style.setProperty('--mouse-y', `${y}px`);
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      style={style}
+      className={`group relative bg-gray-950 border border-gray-800 rounded-2xl p-6 overflow-hidden ${className}`}
+    >
+      <div
+        className="absolute -inset-px rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 
+                   before:absolute before:inset-0 before:rounded-xl 
+                   before:bg-[radial-gradient(400px_circle_at_var(--mouse-x)_var(--mouse-y),rgba(148,163,184,0.1),transparent_80%)] 
+                   pointer-events-none"
+        aria-hidden="true"
+      />
+      <div className="relative z-10 h-full flex flex-col">{children}</div>
+    </div>
+  );
+};
+
+
 const UserAttempts = () => {
-  const { id } = useParams();
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filters, setFilters] = useState({
-    category: '',
-    sortBy: 'createdAt',
-    sortOrder: 'desc'
-  });
+  const [filters, setFilters] = useState({ sortBy: 'createdAt', sortOrder: 'desc' });
   const [searchTerm, setSearchTerm] = useState('');
-  const [statsVisible, setStatsVisible] = useState(true);
-  
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortRef = useRef(null);
+
   useEffect(() => {
     const fetchAttempts = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (filters.category) params.append('category', filters.category);
-        params.append('sortBy', filters.sortBy);
-        params.append('sortOrder', filters.sortOrder);
-        
-        // API call with query parameters
         const response = await api.get('/attempts/user');
-        
-        // Set attempts from the response
-        if (response.data && response.data.attempts) {
-          setAttempts(response.data.attempts);
-        } else {
-          setAttempts([]);
-        }
+        setAttempts(response.data.attempts || []);
         setError(null);
-      } catch (error) {        
-        if (error.response && error.response.status === 404) {
-          setAttempts([]);
-        } else {
-          setError(`Failed to load your quiz attempts. ${error.response?.data?.message || error.message}`);
-        }
+      } catch (err) {        
+        setError(`Failed to load your quiz attempts. ${err.response?.data?.message || err.message}`);
       } finally {
         setLoading(false);
       }
     };
-    
     fetchAttempts();
-    
-  }, [filters]);
-  
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  }, []);
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
-  const toggleStats = () => {
-    setStatsVisible(!statsVisible);
-  };
-  
-  const getScoreBadgeColor = (score, maxScore) => {
-    // Calculate percentage score if both score and maxScore are available
-    let percentageScore;
-    if (score !== null && score !== undefined && maxScore) {
-      percentageScore = (score / maxScore) * 100;
-    } else {
-      percentageScore = score || 0;
-    }
-    
-    if (percentageScore >= 80) return 'bg-green-100 text-green-800';
-    if (percentageScore >= 60) return 'bg-blue-100 text-blue-800';
-    if (percentageScore >= 40) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
-  
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown date';
-    
-    const options = { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (sortRef.current && !sortRef.current.contains(event.target)) {
+        setIsSortOpen(false);
+      }
     };
-    
-    try {
-      return new Date(dateString).toLocaleDateString(undefined, options);
-    } catch (error) {
-      return 'Invalid date';
-    }
-  };
-
-  const formatScore = (score, maxScore) => {
-    if (score === null || score === undefined) return 'N/A';
-    if (maxScore) return `${score}/${maxScore} (${Math.round((score / maxScore) * 100)}%)`;
-    return `${maxScore} pts`;
-  };
-
-  // Helper function to safely access quiz properties
-  const getQuizProperty = (attempt, property, defaultValue = 'Unknown') => {
-    if (!attempt) return defaultValue;
-    if (attempt.quiz && attempt.quiz[property] !== undefined && attempt.quiz[property] !== null) {
-      return attempt.quiz[property];
-    }
-    return defaultValue;
-  };
-
-  // Filter attempts based on search term
-  const filteredAttempts = attempts.filter(attempt => {
-    const quizTitle = getQuizProperty(attempt, 'title', '').toLowerCase();
-    const category = getQuizProperty(attempt, 'category', '').toLowerCase();
-    const searchLower = searchTerm.toLowerCase();
-    
-    return quizTitle.includes(searchLower) || category.includes(searchLower);
-  });
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   
-  // Calculate statistics
-  const stats = {
-    total: attempts.length,
-    completed: attempts.filter(a => a.completedAt).length,
-    avgScore: attempts.length > 0 ? 
-      Math.round(attempts.reduce((sum, a) => {
-        if (a.score !== null && a.score !== undefined && a.maxScore) {
-          return sum + ((a.score / a.maxScore) * 100);
+  const filteredAndSortedAttempts = useMemo(() => {
+    return attempts
+      .filter(attempt => {
+        const quizTitle = attempt.quiz?.title?.toLowerCase() || '';
+        const category = attempt.quiz?.category?.toLowerCase() || '';
+        return quizTitle.includes(searchTerm.toLowerCase()) || category.includes(searchTerm.toLowerCase());
+      })
+      .sort((a, b) => {
+        let compareA, compareB;
+        switch (filters.sortBy) {
+          case 'score':
+            compareA = a.maxScore > 0 ? (a.score / a.maxScore) * 100 : 0;
+            compareB = b.maxScore > 0 ? (b.score / b.maxScore) * 100 : 0;
+            break;
+          case 'quiz.title':
+            compareA = a.quiz?.title || '';
+            compareB = b.quiz?.title || '';
+            return filters.sortOrder === 'asc' ? compareA.localeCompare(compareB) : compareB.localeCompare(compareA);
+          default: // createdAt
+            compareA = new Date(a.createdAt);
+            compareB = new Date(b.createdAt);
         }
-        return sum;
-      }, 0) / attempts.filter(a => a.score !== null && a.score !== undefined && a.maxScore).length) : 0,
-  };
+        return filters.sortOrder === 'asc' ? compareA - compareB : compareB - compareA;
+      });
+  }, [attempts, searchTerm, filters]);
+  
+  const stats = useMemo(() => {
+    const completed = attempts.filter(a => a.completedAt);
+    const avgScore = completed.length > 0
+      ? Math.round(completed.reduce((sum, a) => sum + (a.score / a.maxScore * 100), 0) / completed.length)
+      : 0;
+    return { total: attempts.length, completed: completed.length, avgScore };
+  }, [attempts]);
+
+  const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-64 bg-white rounded-lg shadow-md">
-        <div className="text-center p-10">
-          <Loader className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading your quiz attempts...</p>
-        </div>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-[50vh]"><Loader className="animate-spin h-8 w-8 text-gray-500"/></div>;
   }
   
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-8">
-        <div className="flex items-center space-x-3 text-red-600 mb-4">
-          <X className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">Error Loading Attempts</h2>
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+          <AlertTriangle className="h-12 w-12 text-red-500/50 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">Error Loading Attempts</h3>
+          <p className="text-gray-500 mb-6">{error}</p>
+          <button onClick={() => window.location.reload()} className="px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">Try Again</button>
         </div>
-        <p className="text-gray-700">{error}</p>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200"
-        >
-          Try Again
-        </button>
       </div>
     );
   }
-  
+
+  const statCards = [
+      { icon: <FileSpreadsheet size={18} />, title: "Total Attempts", value: stats.total },
+      { icon: <CheckCircle size={18} />, title: "Completed", value: stats.completed },
+      { icon: <Trophy size={18} />, title: "Average Score", value: `${stats.avgScore}%` }
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header with improved layout */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4  p-6 rounded-lg shadow-lg text-white">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center text-neutral-900">
-            <FileSpreadsheet className="mr-2 h-6 w-6" />
-            Your Quiz Attempts
-          </h1>
-          <p className="mt-1 text-neutral-900">Track your progress and view past quiz results</p>
-        </div>
-        <Link to="/quizzes" className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-          <PlusCircle className="h-4 w-4 mr-2" />
-          Take New Quiz
-        </Link>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 animate-fade-in">
+      {/* Header */}
+      <header className="animate-slide-in-up" style={{ animationDelay: '100ms' }}>
+        <h1 className="text-4xl font-bold text-white">My Attempts</h1>
+        <p className="text-gray-400 mt-1">Review your quiz history and performance.</p>
+      </header>
       
-      {/* Stats Dashboard */}
+      {/* Stats Overview */}
       {attempts.length > 0 && (
-        <div className={`bg-white rounded-lg shadow-md overflow-hidden transition-all duration-300 ${statsVisible ? 'max-h-96' : 'max-h-16'}`}>
-          <div 
-            className="flex justify-between items-center px-6 py-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors duration-200"
-            onClick={toggleStats}
-          >
-            <div className="flex items-center">
-              <BarChart className="h-5 w-5 text-blue-600 mr-2" />
-              <h2 className="font-semibold text-gray-700">Quiz Performance Dashboard</h2>
-            </div>
-            <button className="text-gray-500 hover:text-gray-700">
-              {statsVisible ? (
-                <ChevronUpIcon className="h-5 w-5" />
-              ) : (
-                <ChevronDownIcon className="h-5 w-5" />
-              )}
-            </button>
-          </div>
-          
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard 
-                icon={<FileSpreadsheet className="h-8 w-8 text-blue-500" />}
-                title="Total Attempts"
-                value={stats.total}
-                color="blue"
-              />
-              <StatCard 
-                icon={<CheckCircle className="h-8 w-8 text-green-500" />}
-                title="Completed"
-                value={stats.completed}
-                color="green"
-              />
-              <StatCard 
-                icon={<Trophy className="h-8 w-8 text-purple-500" />}
-                title="Avg. Score"
-                value={`${stats.avgScore}%`}
-                color="purple"
-              />
-            </div>
-            
-            
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {statCards.map((card, index) => (
+              <Card key={index} className="animate-slide-in-up" style={{ animationDelay: `${200 + index * 100}ms` }}>
+                  <div className="flex items-center text-gray-400 gap-3">{card.icon}<h3 className="font-semibold text-sm">{card.title}</h3></div>
+                  <p className="text-5xl font-bold text-white mt-2">{card.value}</p>
+              </Card>
+          ))}
         </div>
       )}
       
-      {/* Filters Panel */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="flex items-center mb-4 text-gray-700">
-          <Filter className="h-5 w-5 mr-2 text-blue-600" />
-          <h2 className="font-semibold">Filter & Search Attempts</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {/* Search Input */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search Quiz Title</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                placeholder="Search by title or category..."
-                className="w-full pl-10 p-3 bg-gray-50 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              {searchTerm && (
-                <button 
-                  onClick={() => setSearchTerm('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
-                </button>
-              )}
-            </div>
+      {/* Control Bar & Table */}
+      <div className="bg-gray-950 border border-gray-800 rounded-2xl animate-slide-in-up" style={{ animationDelay: '500ms' }}>
+        <div className="p-4 flex flex-col md:flex-row items-center gap-4 border-b border-gray-800">
+          <div className="relative w-full md:w-auto flex-grow">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search attempts..." className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-700"/>
           </div>
-          
-        
-          {/* Sort Controls */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-            <div className="flex space-x-2">
-              <div className="relative flex-1">
-                <select
-                  name="sortBy"
-                  value={filters.sortBy}
-                  onChange={handleFilterChange}
-                  className="w-full p-3 bg-gray-50 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="createdAt">Date</option>
-                  <option value="score">Score</option>
-                  <option value="quiz.title">Quiz Name</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                  <ArrowDownUp className="h-4 w-4" />
-                </div>
-              </div>
-              
-              <div className="relative flex-1">
-                <select
-                  name="sortOrder"
-                  value={filters.sortOrder}
-                  onChange={handleFilterChange}
-                  className="w-full p-3 bg-gray-50 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="desc">Descending</option>
-                  <option value="asc">Ascending</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                  <ArrowDownUp className="h-4 w-4" />
-                </div>
-              </div>
+          <div className="relative" ref={sortRef}>
+            <button onClick={() => setIsSortOpen(!isSortOpen)} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 bg-gray-900 border border-gray-800 rounded-lg hover:bg-gray-800 w-full justify-between md:w-auto">
+              Sort by: <span className="font-semibold text-white capitalize">{filters.sortBy.replace('quiz.title', 'Title')}</span> 
+              <ChevronDown size={16} className={`transition-transform duration-200 ${isSortOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <div className={`absolute right-0 top-full mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 overflow-hidden transition-all duration-300 ${isSortOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
+                <button onClick={() => { setFilters(f => ({...f, sortBy: 'createdAt'})); setIsSortOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">Date</button>
+                <button onClick={() => { setFilters(f => ({...f, sortBy: 'score'})); setIsSortOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">Score</button>
+                <button onClick={() => { setFilters(f => ({...f, sortBy: 'quiz.title'})); setIsSortOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">Quiz Title</button>
+                <div className="border-t border-gray-700 my-1"></div>
+                <button onClick={() => { setFilters(f => ({...f, sortOrder: 'desc'})); setIsSortOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">Descending</button>
+                <button onClick={() => { setFilters(f => ({...f, sortOrder: 'asc'})); setIsSortOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">Ascending</button>
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* Attempts List */}
-      {attempts.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <div className="flex flex-col items-center">
-            <BookOpen className="h-16 w-16 text-gray-400 mb-4" />
-            <p className="text-gray-600 mb-4">You haven't taken any quizzes yet.</p>
-            <Link to="/quizzes" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center">
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Browse Available Quizzes
+        
+        {/* Attempts List */}
+        {attempts.length === 0 ? (
+          <div className="text-center py-20">
+            <BookOpen className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">No Attempts Yet</h3>
+            <p className="text-gray-500 mb-6">You haven't taken any quizzes. Start one to see your progress!</p>
+            <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
+              <PlusCircle size={16}/> Browse Quizzes
             </Link>
           </div>
-        </div>
-      ) : (
-        <>
-          {/* Results Summary */}
-          <div className="bg-gray-50 p-4 rounded-lg shadow-sm text-sm text-gray-600">
-            {filteredAttempts.length === 0 ? (
-              <p>No quiz attempts match your search criteria.</p>
-            ) : (
-              <p>Showing {filteredAttempts.length} of {attempts.length} total quiz attempts.</p>
-            )}
-          </div>
-        
-          {filteredAttempts.length > 0 && (
-            <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quiz</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAttempts.map((attempt) => (
-                      <tr key={attempt._id || `temp-${Math.random()}`} className="hover:bg-gray-50 transition-colors duration-150">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {getQuizProperty(attempt, 'title', 'Untitled Quiz')}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500 flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {formatDate(attempt.startedAt || attempt.createdAt)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getScoreBadgeColor(attempt.score, attempt.maxScore)}`}>
-                            {formatScore(attempt.score, attempt.maxScore)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {attempt.completedAt ? (
-                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Completed
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                              <Clock className="h-3 w-3 mr-1" />
-                              In Progress
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-3">
-                            <Link 
-                              to={`/attempts/${attempt._id}`} 
-                              className="text-blue-600 hover:text-blue-900 flex items-center"
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View Details
-                            </Link>
-                            {attempt.quiz && attempt.quiz._id && (
-                              <Link 
-                                to={`/quiz/${attempt.quiz._id}`} 
-                                className="text-green-600 hover:text-green-900 flex items-center"
-                              >
-                                <RefreshCw className="h-4 w-4 mr-1" />
-                                {attempt.completedAt ? 'Retake Quiz' : 'Continue Quiz'}
-                              </Link>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+        ) : filteredAndSortedAttempts.length > 0 ? (
+            <div className="overflow-x-auto">
+                <table className="min-w-full">
+                    <thead className="bg-gray-900"><tr className="border-b border-gray-800"><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Quiz</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Date</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Score</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Status</th><th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase"></th></tr></thead>
+                    <tbody className="divide-y divide-gray-800">
+                    {filteredAndSortedAttempts.map((attempt, index) => (
+                        <tr key={attempt._id} className="hover:bg-gray-900 transition-colors animate-fade-in" style={{ animationDelay: `${index * 50}ms`}}>
+                        <td className="px-5 py-4 whitespace-nowrap"><div className="font-medium text-white">{attempt.quiz?.title || 'Untitled Quiz'}</div><div className="text-xs text-gray-500">{attempt.quiz?.category || 'General'}</div></td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-400">{formatDate(attempt.createdAt)}</td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm"><span className={`px-2 py-1 font-semibold rounded-full text-xs ${attempt.maxScore > 0 ? (attempt.score/attempt.maxScore*100 >= 60 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400') : 'bg-gray-500/10 text-gray-400'}`}>{attempt.maxScore > 0 ? `${Math.round(attempt.score/attempt.maxScore*100)}%` : 'N/A'}</span></td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm">{attempt.completedAt ? (<div className="inline-flex items-center gap-1.5 text-green-400"><CheckCircle size={14}/> Completed</div>) : (<div className="inline-flex items-center gap-1.5 text-yellow-400"><Clock size={14}/> In Progress</div>)}</td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-right"><Link to={`/attempts/${attempt._id}`} className="font-semibold text-gray-300 hover:text-white">View Details</Link></td>
+                        </tr>
                     ))}
-                  </tbody>
+                    </tbody>
                 </table>
-              </div>
             </div>
-          )}
-        </>
-      )}
+        ) : (
+            <div className="text-center py-20"><p className="text-gray-500">No attempts match your search criteria.</p></div>
+        )}
+      </div>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-in-up { animation: slideInUp 0.6s ease-out forwards; opacity: 0; animation-fill-mode: forwards; }
+      `}</style>
     </div>
   );
 };
-
-// Stat Card Component
-const StatCard = ({ icon, title, value, color }) => {
-  const colorClasses = {
-    blue: 'bg-blue-50 border-blue-100',
-    green: 'bg-green-50 border-green-100',
-    yellow: 'bg-yellow-50 border-yellow-100',
-    purple: 'bg-purple-50 border-purple-100',
-  };
-  
-  return (
-    <div className={`${colorClasses[color] || 'bg-gray-50 border-gray-100'} border rounded-lg p-4 flex items-center`}>
-      <div className="mr-4">
-        {icon}
-      </div>
-      <div>
-        <p className="text-sm text-gray-600">{title}</p>
-        <p className="text-xl font-bold">{value}</p>
-      </div>
-    </div>
-  );
-};
-
-// Simple icons for chevron
-const ChevronUpIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-  </svg>
-);
-
-const ChevronDownIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-  </svg>
-);
 
 export default UserAttempts;
+

@@ -1,238 +1,317 @@
 // client/quiz/QuizList.jsx
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import QuizCard from './QuizCard';
-import { Search, Filter, Book, Star ,RotateCw, AlertCircle} from 'lucide-react';
+import { Search, Filter, Book, RotateCw, AlertCircle, Sparkles, Target, TrendingUp } from 'lucide-react';
+
+// --- ENHANCEMENT: Moved constants outside the component to prevent re-declaration on each render.
+const CATEGORIES = ['Programming', 'Science', 'Mathematics', 'History', 'Geography', 'General Knowledge'];
+const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
 
 const QuizList = () => {
-  const [quizzes, setQuizzes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [filters, setFilters] = useState({
-    category: '',
-    difficulty: '',
-    search: ''
-  });
-
+  const [quizzes, setQuizzes] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+  const [isFilterExpanded, setIsFilterExpanded] = React.useState(false);
+  
+  // --- ENHANCEMENT: useSearchParams makes the URL the single source of truth for filters.
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const categories = ['Programming', 'Science', 'Mathematics', 'History', 'Geography', 'General Knowledge'];
-  const difficulties = ['Easy', 'Medium', 'Hard'];
+  // Read filter values directly from the URL search parameters.
+  const filters = {
+    category: searchParams.get('category') || '',
+    difficulty: searchParams.get('difficulty') || '',
+    search: searchParams.get('search') || ''
+  };
 
-  const fetchQuizzes = async () => {
+  // Check if any filters are active
+  const hasActiveFilters = filters.category || filters.difficulty || filters.search;
+
+  // The data fetching logic remains robust.
+  const fetchQuizzes = React.useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const params = new URLSearchParams();
-      if (filters.category) params.append('category', filters.category);
-      if (filters.difficulty) params.append('difficulty', filters.difficulty);
-      if (filters.search) params.append('search', filters.search);
-
-      const response = await api.get(`/quizzes?${params}`);
+      // The params are now built directly from the URL's searchParams object.
+      const response = await api.get(`/quizzes?${searchParams}`);
       setQuizzes(response.data.quizzes);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching quizzes:', error);
+    } catch (err) {
+      console.error('Error fetching quizzes:', err);
       setError('Failed to load quizzes. Please try again later.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchParams]); // Re-run fetchQuizzes whenever searchParams change.
+  
+  // Debounced effect for fetching data based on URL changes.
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchQuizzes();
+    }, 500); // Fetch 500ms after the last filter change.
 
-  useEffect(() => {
-    fetchQuizzes();
-  }, [filters]);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [fetchQuizzes]);
 
+  // --- ENHANCEMENT: Filter changes now update the URL parameters.
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+    const newParams = new URLSearchParams(searchParams);
+    if (value) {
+      newParams.set(name, value);
+    } else {
+      newParams.delete(name); // Remove param from URL if the value is empty
+    }
+    setSearchParams(newParams);
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    fetchQuizzes();
+  // --- ENHANCEMENT: Resetting now clears the URL parameters.
+  const resetFilters = () => {
+    setSearchParams({});
   };
 
   const handleRandomizeQuiz = () => {
-    if (loading || quizzes.length === 0) {
-      alert('Quizzes are still loading or none are available to select randomly.');
-      return;
-    }
-
+    if (quizzes.length === 0) return;
     const randomIndex = Math.floor(Math.random() * quizzes.length);
-    const randomQuiz = quizzes[randomIndex];
-
-    navigate(`/quiz/${randomQuiz._id}/take`);
+    navigate(`/quiz/${quizzes[randomIndex]._id}/take`);
   };
 
   return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="mb-12 text-center space-y-3">
-          <h1 className="text-5xl font-bold text-gray-900 bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 inline-block">
-            Knowledge Arena
+    <div className="bg-black text-gray-300 min-h-screen relative overflow-hidden">
+      {/* Ambient background effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/20 via-transparent to-gray-800/10 pointer-events-none"></div>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-gray-800/5 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-gray-700/5 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
+        {/* Hero Section with enhanced styling */}
+        <div className="mb-16 text-center relative">
+          <div className="inline-flex items-center gap-2 bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-full px-4 py-2 mb-6">
+            <Sparkles className="h-4 w-4 text-gray-400" />
+            <span className="text-sm text-gray-400 font-medium">Knowledge Testing Platform</span>
+          </div>
+          
+          <h1 className="text-6xl sm:text-7xl font-bold text-white mb-6 tracking-tight">
+            Knowledge
+            <span className="block bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+              Arena
+            </span>
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Test your skills with our curated collection of interactive quizzes.
-            <span className="block mt-1 text-sm text-gray-500">Updated daily • Expert verified • Community driven</span>
+          <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
+            Challenge your intellect with our curated collection of quizzes. Test your knowledge across various domains and track your progress.
           </p>
+          
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto mt-12">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-white">{quizzes.length}</div>
+              <div className="text-sm text-gray-500">Available Quizzes</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-white">{CATEGORIES.length}</div>
+              <div className="text-sm text-gray-500">Categories</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-white">{DIFFICULTIES.length}</div>
+              <div className="text-sm text-gray-500">Difficulty Levels</div>
+            </div>
+          </div>
         </div>
 
-        {/* Filter Section */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl mb-8 border border-gray-200/60">
-          <div className="p-6 lg:p-8">
-            <div className="flex items-center mb-6 gap-2 text-blue-600">
-              <Filter className="h-6 w-6" strokeWidth={2} />
-              <h2 className="text-2xl font-semibold">Refine Your Search</h2>
-            </div>
-
-            {/* UPDATED GRID LAYOUT FOR FILTERS AND BUTTON */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4"> {/* Changed to md:grid-cols-4 */}
-              {/* Category Filter */}
-              <div className="relative group">
-                <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Category</label>
-                <div className="relative">
-                  <select
-                    name="category"
-                    value={filters.category}
-                    onChange={handleFilterChange}
-                    className="w-full pl-4 pr-10 py-3 border border-gray-300/80 rounded-xl bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm transition-all"
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <Book className="h-5 w-5" />
-                  </div>
+        {/* Enhanced Filter Section */}
+        <div className="bg-gray-950/60 backdrop-blur-sm border border-gray-800/50 rounded-2xl mb-10 overflow-hidden">
+          {/* Filter Header */}
+          <div className="p-6 border-b border-gray-800/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-800/50 rounded-lg">
+                  <Filter className="h-5 w-5 text-gray-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-white">Filter Quizzes</h2>
+                  <p className="text-sm text-gray-500">Narrow down your search</p>
                 </div>
               </div>
-
-              {/* Difficulty Filter */}
-              <div className="relative group">
-                <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Difficulty</label>
-                <div className="relative">
-                  <select
-                    name="difficulty"
-                    value={filters.difficulty}
-                    onChange={handleFilterChange}
-                    className="w-full pl-4 pr-10 py-3 border border-gray-300/80 rounded-xl bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm transition-all"
-                  >
-                    <option value="">All Levels</option>
-                    {difficulties.map(difficulty => (
-                      <option key={difficulty} value={difficulty}>
-                        {difficulty}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    <Star className="h-5 w-5" />
+              
+              <div className="flex items-center gap-3">
+                {hasActiveFilters && (
+                  <div className="flex items-center gap-2 bg-gray-800/50 rounded-full px-3 py-1">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span className="text-xs text-gray-400">Filters Active</span>
                   </div>
-                </div>
-              </div>
-
-              {/* Search Input - Now takes 2 columns on medium screens */}
-              <div className="md:col-span-1 relative group"> {/* Changed to md:col-span-1 */}
-                <label className="block text-sm font-medium text-gray-700 mb-2 ml-1">Search</label>
-                <form onSubmit={handleSearch} className="relative">
-                  <input
-                    type="text"
-                    name="search"
-                    value={filters.search}
-                    onChange={handleFilterChange}
-                    placeholder="Search quizzes..."
-                    className="w-full pl-4 pr-14 py-3 border border-gray-300/80 rounded-xl bg-white focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm transition-all"
-                  />
-                  <button
-                    type="submit"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600/10 p-2 rounded-lg hover:bg-blue-600/20 transition-colors"
-                  >
-                    <Search className="h-5 w-5 text-blue-600" />
-                  </button>
-                </form>
-              </div>
-
-              {/* RANDOMIZE QUIZ BUTTON - Now placed at the end of the filter row */}
-              <div className="relative group flex items-end"> {/* Use flex items-end to align with other inputs */}
+                )}
+                
                 <button
-                    onClick={handleRandomizeQuiz}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 flex items-center justify-center gap-2"
+                  onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                  className="lg:hidden p-2 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition-colors"
                 >
-                    <RotateCw className="h-5 w-5" />
-                    Random Quiz
+                  <Filter className="h-4 w-4 text-gray-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Controls */}
+          <div className={`p-6 transition-all duration-300 ${isFilterExpanded ? 'block' : 'hidden lg:block'}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Category */}
+              <div className="relative group">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Category</label>
+                <select 
+                  name="category" 
+                  value={filters.category} 
+                  onChange={handleFilterChange} 
+                  className="w-full py-3 px-4 bg-gray-900/80 border border-gray-800 rounded-xl focus:ring-2 focus:ring-gray-700 focus:border-gray-600 transition-all duration-200 hover:bg-gray-900 appearance-none cursor-pointer"
+                >
+                  <option value="">All Categories</option>
+                  {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+
+              {/* Difficulty */}
+              <div className="relative group">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Difficulty</label>
+                <select 
+                  name="difficulty" 
+                  value={filters.difficulty} 
+                  onChange={handleFilterChange} 
+                  className="w-full py-3 px-4 bg-gray-900/80 border border-gray-800 rounded-xl focus:ring-2 focus:ring-gray-700 focus:border-gray-600 transition-all duration-200 hover:bg-gray-900 appearance-none cursor-pointer"
+                >
+                  <option value="">All Difficulties</option>
+                  {DIFFICULTIES.map(diff => <option key={diff} value={diff}>{diff}</option>)}
+                </select>
+              </div>
+
+              {/* Search */}
+              <div className="relative group">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Search</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    name="search" 
+                    value={filters.search} 
+                    onChange={handleFilterChange} 
+                    placeholder="Search quizzes..." 
+                    className="w-full pl-12 pr-4 py-3 bg-gray-900/80 border border-gray-800 rounded-xl focus:ring-2 focus:ring-gray-700 focus:border-gray-600 transition-all duration-200 hover:bg-gray-900 placeholder-gray-600"
+                  />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-600 group-focus-within:text-gray-400 transition-colors" />
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2">
+                <label className="block text-sm font-medium text-gray-400 mb-2">Actions</label>
+                <button 
+                  onClick={handleRandomizeQuiz}
+                  disabled={loading || quizzes.length === 0}
+                  className="w-full bg-gradient-to-r from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 border border-gray-700/50 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <RotateCw className="h-5 w-5" />
+                  Random Quiz
                 </button>
               </div>
             </div>
             
+            {/* Reset button when filters are active */}
+            {hasActiveFilters && (
+              <div className="mt-4 pt-4 border-t border-gray-800/50">
+                <button 
+                  onClick={resetFilters} 
+                  className="text-sm text-gray-500 hover:text-white flex items-center gap-2 transition-colors group"
+                >
+                  <RotateCw className="h-4 w-4 group-hover:rotate-180 transition-transform duration-300" />
+                  Clear all filters
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-
-        {/* Results Header */}
+        {/* Enhanced Results Header */}
         {!loading && !error && (
-          <div className="mb-6 flex items-center justify-between px-2">
-            <div className="text-gray-600 font-medium">
-              <span className="text-blue-600">{quizzes.length}</span> results found
-              {(filters.category || filters.difficulty || filters.search) && (
-                <span className="ml-2 text-sm text-gray-500">(filtered)</span>
+          <div className="mb-8 flex items-center justify-between px-2">
+            <div className="flex items-center gap-4">
+              <div className="text-gray-400 flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                <span className="font-semibold text-white text-lg">{quizzes.length}</span> 
+                <span className="text-gray-500">quizzes found</span>
+              </div>
+              
+              {hasActiveFilters && (
+                <div className="flex items-center gap-2 bg-gray-900/50 rounded-full px-3 py-1">
+                  <TrendingUp className="h-3 w-3 text-green-400" />
+                  <span className="text-xs text-gray-400">Filtered results</span>
+                </div>
               )}
             </div>
-            <button
-              onClick={() => setFilters({ category: '', difficulty: '', search: '' })}
-              className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1"
-            >
-              <RotateCw className="h-4 w-4" />
-              Reset filters
-            </button>
           </div>
         )}
 
-        {/* Content States */}
+        {/* Enhanced Content Area */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-64 bg-white/80 rounded-2xl shadow-sm animate-pulse border border-gray-100" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[...Array(6)].map((_, i) => (
+              <div 
+                key={i} 
+                className="h-[24rem] bg-gradient-to-br from-gray-900/50 to-gray-800/30 rounded-2xl animate-pulse border border-gray-800/30"
+                style={{ animationDelay: `${i * 100}ms` }}
+              />
             ))}
           </div>
         ) : error ? (
-          <div className="text-center py-16 bg-gradient-to-br from-red-50/50 to-pink-50/50 rounded-2xl border border-red-100">
-            <div className="mx-auto max-w-md">
-              <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Oops! Something went wrong</h3>
-              <p className="text-gray-600 mb-6">{error}</p>
-              <button
-                onClick={fetchQuizzes}
-                className="px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium flex items-center gap-2 mx-auto"
-              >
-                <RotateCw className="h-4 w-4" />
-                Retry
-              </button>
+          <div className="text-center py-24 bg-gradient-to-br from-gray-950/80 to-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl">
+            <div className="p-4 bg-red-500/10 rounded-full w-fit mx-auto mb-6">
+              <AlertCircle className="h-12 w-12 text-red-400" />
             </div>
+            <h3 className="text-2xl font-semibold text-white mb-3">Could Not Load Quizzes</h3>
+            <p className="text-gray-400 mb-8 max-w-md mx-auto leading-relaxed">{error}</p>
+            <button 
+              onClick={fetchQuizzes} 
+              className="px-8 py-3 bg-white text-black rounded-xl hover:bg-gray-200 font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95"
+            >
+              Try Again
+            </button>
           </div>
         ) : quizzes.length === 0 ? (
-          <div className="text-center py-16 bg-gradient-to-br from-blue-50/50 to-purple-50/50 rounded-2xl border border-blue-100">
-            <div className="mx-auto max-w-md">
-              <Book className="h-16 w-16 text-blue-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No quizzes found</h3>
-              <p className="text-gray-600 mb-6">Try adjusting your filters or search terms</p>
-              <button
-                onClick={() => setFilters({ category: '', difficulty: '', search: '' })}
-                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center gap-2 mx-auto"
+          <div className="text-center py-24 bg-gradient-to-br from-gray-950/80 to-gray-900/40 backdrop-blur-sm border border-gray-800/50 rounded-2xl">
+            <div className="p-4 bg-gray-800/30 rounded-full w-fit mx-auto mb-6">
+              <Book className="h-12 w-12 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-semibold text-white mb-3">No Quizzes Found</h3>
+            <p className="text-gray-400 mb-8 max-w-md mx-auto leading-relaxed">
+              {hasActiveFilters 
+                ? "Your search or filter criteria returned no results. Try adjusting your filters."
+                : "No quizzes are currently available."
+              }
+            </p>
+            {hasActiveFilters && (
+              <button 
+                onClick={resetFilters} 
+                className="px-8 py-3 bg-white text-black rounded-xl hover:bg-gray-200 font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95"
               >
                 Clear Filters
               </button>
-            </div>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quizzes.map(quiz => (
-              <QuizCard key={quiz._id} quiz={quiz} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {quizzes.map((quiz, index) => (
+              <div
+                key={quiz._id}
+                className="transform transition-all duration-300 hover:scale-[1.02]"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <QuizCard quiz={quiz} />
+              </div>
             ))}
           </div>
         )}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
-  export default QuizList;
+export default QuizList;

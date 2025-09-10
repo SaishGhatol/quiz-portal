@@ -1,122 +1,115 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-
+import { toast } from 'react-toastify';
+import { ArrowLeft, Mail, Phone, MapPin, Send, Loader } from 'lucide-react';
 
 const ContactPage = () => {
-    const [formStatus, setFormStatus] = React.useState('');
+    const [formStatus, setFormStatus] = useState('');
+    const [loading, setLoading] = useState(false);
     
     const handleSubmit = (e) => {
       e.preventDefault();
-      setFormStatus('Your message has been sent. We will get back to you soon!');
-      // Here you would normally handle the form submission
+      setLoading(true);
+      // Simulate API call
+      setTimeout(() => {
+        setLoading(false);
+        toast.success('Your message has been sent. We will get back to you soon!', { theme: 'dark' });
+        e.target.reset();
+      }, 1500);
     };
     
     return (
-      <div className="bg-gray-50 min-h-screen">
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-6 flex items-center">
-          <Link 
-              to="/" 
-              className="flex items-center bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors duration-300"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-              </svg>
+      <>
+        <style>{`
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+            .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        `}</style>
+        <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
+          <header className="mb-8">
+            <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
+              <ArrowLeft size={16} />
               Back to Home
             </Link>
-          </div>
-          
-          <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-            <div className="md:flex">
-              <div className="md:w-1/2 bg-gradient-to-r from-blue-600 to-purple-600 p-6 md:p-10 text-white">
-                <h1 className="text-3xl font-bold mb-6">Get in Touch</h1>
-                <p className="mb-6">We'd love to hear from you. Please fill out the form and we'll get back to you as soon as possible.</p>
+            <h1 className="text-4xl font-bold text-white mt-2 flex items-center gap-3">
+              Contact Us
+            </h1>
+            <p className="text-gray-400 mt-1">We're here to help. Send us a message and we'll get back to you.</p>
+          </header>
+
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden">
+            <div className="grid md:grid-cols-2">
+              {/* Left Side: Info */}
+              <div className="p-8 md:p-10 bg-gray-900/50">
+                <h2 className="text-2xl font-semibold text-white mb-6">Get in Touch</h2>
+                <p className="text-gray-400 mb-8 leading-relaxed">
+                  Have a question, feedback, or need support? Fill out the form or use the contact details below. Our team is ready to assist you.
+                </p>
                 
-                <div className="mt-8">
-                  <div className="flex items-center mb-4">
-                    <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                    </svg>
-                    <span>saishghatol100@gmail.com</span>
+                <div className="space-y-6">
+                  <div className="flex items-start gap-4">
+                    <Mail size={20} className="text-gray-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold text-white">Email</h3>
+                      <a href="mailto:saishghatol100@gmail.com" className="text-gray-400 hover:text-white transition-colors">saishghatol100@gmail.com</a>
+                    </div>
                   </div>
-                  <div className="flex items-center mb-4">
-                    <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
-                    </svg>
-                    <span> +(91) 123-4567</span>
+                   <div className="flex items-start gap-4">
+                    <Phone size={20} className="text-gray-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold text-white">Phone</h3>
+                      <a href="tel:+911234567890" className="text-gray-400 hover:text-white transition-colors">+(91) 123-4567</a>
+                    </div>
                   </div>
-                  <div className="flex items-center">
-                    <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    <span>123 Quiz Street, Knowledge City, India 12345</span>
+                   <div className="flex items-start gap-4">
+                    <MapPin size={20} className="text-gray-500 mt-1 flex-shrink-0" />
+                    <div>
+                      <h3 className="font-semibold text-white">Office</h3>
+                      <p className="text-gray-400">123 Quiz Street, Knowledge City, India</p>
+                    </div>
                   </div>
                 </div>
               </div>
               
-              <div className="md:w-1/2 p-6 md:p-10">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Send Us a Message</h2>
-                
-                {formStatus && (
-                  <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                    {formStatus}
-                  </div>
-                )}
-                
-                <form onSubmit={handleSubmit}>
-                  <div className="mb-4">
-                    <label htmlFor="name" className="block text-gray-700 font-medium mb-2">Name</label>
-                    <input
-                      type="text"
-                      id="name"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
+              {/* Right Side: Form */}
+              <div className="p-8 md:p-10">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="relative">
+                    <input type="text" id="name" required className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent focus:outline-none focus:ring-1 focus:ring-gray-500" placeholder="Full Name" />
+                    <label htmlFor="name" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Full Name</label>
                   </div>
                   
-                  <div className="mb-4">
-                    <label htmlFor="email" className="block text-gray-700 font-medium mb-2">Email</label>
-                    <input
-                      type="email"
-                      id="email"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
+                   <div className="relative">
+                    <input type="email" id="email" required className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent" placeholder="Email Address" />
+                    <label htmlFor="email" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Email Address</label>
+                  </div>
+
+                   <div className="relative">
+                    <input type="text" id="subject" required className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent" placeholder="Subject" />
+                    <label htmlFor="subject" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Subject</label>
                   </div>
                   
-                  <div className="mb-4">
-                    <label htmlFor="subject" className="block text-gray-700 font-medium mb-2">Subject</label>
-                    <input
-                      type="text"
-                      id="subject"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="mb-6">
-                    <label htmlFor="message" className="block text-gray-700 font-medium mb-2">Message</label>
-                    <textarea
-                      id="message"
-                      rows="4"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    ></textarea>
+                  <div className="relative">
+                    <textarea id="message" rows="4" required className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent" placeholder="Your Message"></textarea>
+                    <label htmlFor="message" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Your Message</label>
                   </div>
                   
                   <button
                     type="submit"
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    disabled={loading}
+                    className="w-full flex justify-center items-center py-3 px-4 text-sm font-semibold rounded-lg text-black bg-white hover:bg-gray-200 transition disabled:opacity-50"
                   >
-                    Send Message
+                    {loading ? (
+                        <><Loader className="animate-spin h-5 w-5 mr-2" /> Sending...</>
+                    ) : (
+                        <><Send className="h-5 w-5 mr-2" /> Send Message</>
+                    )}
                   </button>
                 </form>
               </div>
             </div>
           </div>
         </div>
-      </div>
+    </>
     );
   };
   

@@ -2,350 +2,285 @@ import React, { useState, useContext, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import AuthContext from '../../contexts/AuthContext';
 import api from '../../utils/api';
-import { User, Lock, Calendar, Shield, Info, ChevronDown, ChevronUp, Key, Save } from 'lucide-react';
+import { User, Lock, Calendar, Shield, Save, Eye, EyeOff, Loader, Trash2, AlertTriangle, Star, Camera } from 'lucide-react';
 
 const Profile = () => {
-  const { currentUser, updateUser } = useContext(AuthContext);
+  const { currentUser, updateUser, deleteUser, logout } = useContext(AuthContext); 
+
+  const [activeTab, setActiveTab] = useState('profile');
+  const [formData, setFormData] = useState({ name: '', email: '' });
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [testimonial, setTestimonial] = useState({ rating: 0, content: '' });
   
-  const [formData, setFormData] = useState({
-    name: currentUser?.name || '',
-    email: currentUser?.email || '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  
-  const [isLoading, setIsLoading] = useState(false);
-  const [isPasswordChanging, setIsPasswordChanging] = useState(false);
-  const [showPasswordSection, setShowPasswordSection] = useState(false);
-  
+  // New state for profile picture
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState(null);
+
+  const [loading, setLoading] = useState({ profile: false, password: false, delete: false, testimonial: false, avatar: false });
+  const [showPassword, setShowPassword] = useState({ current: false, new: false, confirm: false });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   useEffect(() => {
-    // Update form data when currentUser changes
     if (currentUser) {
-      setFormData(prev => ({
-        ...prev,
-        name: currentUser.name || '',
-        email: currentUser.email || ''
-      }));
+      setFormData({ name: currentUser.name || '', email: currentUser.email || '' });
     }
   }, [currentUser]);
-  
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+
+  // Handle file selection for avatar
+  const handleProfileImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+        if (file.size > 2 * 1024 * 1024) { // 2MB limit
+            toast.error('Image is too large. Max size is 2MB.', { theme: 'dark' });
+            return;
+        }
+        setProfileImageFile(file);
+        setProfileImagePreview(URL.createObjectURL(file));
+    } else {
+        toast.error('Please select a valid image file.', { theme: 'dark' });
+    }
   };
-  
+
+  // Handle avatar upload to server
+  const handleImageUpload = async () => {
+    if (!profileImageFile) return;
+    setLoading(p => ({ ...p, avatar: true }));
+    const uploadFormData = new FormData();
+    uploadFormData.append('profilePicture', profileImageFile);
+
+    try {
+        const response = await api.put(`/users/${currentUser.id}/avatar`, uploadFormData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        if (updateUser) updateUser(response.data.user);
+        toast.success('Profile picture updated successfully!', { theme: 'dark' });
+        setProfileImageFile(null);
+        setProfileImagePreview(null);
+    } catch (error) {
+        toast.error(error.response?.data?.message || 'Failed to upload image.', { theme: 'dark' });
+    } finally {
+        setLoading(p => ({ ...p, avatar: false }));
+    }
+  };
+
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    
-    // Prepare data for profile update
-    const updateData = {};
-    
-    if (formData.name !== currentUser.name) {
-      updateData.name = formData.name;
-    }
-    
-    // Don't update if nothing changed
-    if (Object.keys(updateData).length === 0) {
-      toast.info('No changes to update');
-      return;
-    }
-    
-    setIsLoading(true);
-    
+    if (formData.name === currentUser.name) return toast.info('No changes to save.', { theme: 'dark' });
+    setLoading(p => ({ ...p, profile: true }));
     try {
-      // Make API call to update profile
-      const response = await api.put(`/users/${currentUser.id}`, updateData);
-      
-      // Update user in context
-      if (updateUser && typeof updateUser === 'function') {
-        updateUser(response.data.user);
-      }
-      
-      toast.success('Profile updated successfully');
+      const response = await api.put(`/users/${currentUser.id}`, { name: formData.name });
+      if (updateUser) updateUser(response.data.user);
+      toast.success('Profile updated successfully!', { theme: 'dark' });
     } catch (error) {
-      console.error('Profile update error:', error);
-      toast.error(error.response?.data?.message || 'Failed to update profile');
+      toast.error(error.response?.data?.message || 'Failed to update profile.', { theme: 'dark' });
     } finally {
-      setIsLoading(false);
+      setLoading(p => ({ ...p, profile: false }));
     }
   };
-  
+
   const handlePasswordChange = async (e) => {
     e.preventDefault();
-    
-    // Validate passwords
-    if (formData.newPassword !== formData.confirmPassword) {
-      toast.error('New passwords do not match');
-      return;
-    }
-    
-    if (formData.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      return;
-    }
-    
-    if (!formData.currentPassword) {
-      toast.error('Current password is required');
-      return;
-    }
-    
-    setIsPasswordChanging(true);
-    
+    if (passwordData.newPassword !== passwordData.confirmPassword) return toast.error('New passwords do not match.', { theme: 'dark' });
+    if (passwordData.newPassword.length < 6) return toast.error('New password must be at least 6 characters.', { theme: 'dark' });
+    setLoading(p => ({ ...p, password: true }));
     try {
-      // Make API call to change password
-      await api.put(`/users/${currentUser.id}/password`, {
-        currentPassword: formData.currentPassword,
-        newPassword: formData.newPassword
-      });
-      
-      toast.success('Password changed successfully');
-      
-      // Reset password fields
-      setFormData(prev => ({
-        ...prev,
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      }));
-      
-      // Hide the password section after successful change
-      setShowPasswordSection(false);
+      await api.put(`/users/${currentUser.id}/password`, passwordData);
+      toast.success('Password changed successfully!', { theme: 'dark' });
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
-      console.error('Password change error:', error);
-      toast.error(error.response?.data?.message || 'Failed to change password');
+      toast.error(error.response?.data?.message || 'Failed to change password.', { theme: 'dark' });
     } finally {
-      setIsPasswordChanging(false);
+      setLoading(p => ({ ...p, password: false }));
     }
   };
-  
-  const togglePasswordSection = () => {
-    setShowPasswordSection(!showPasswordSection);
+
+  const handleTestimonialSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(p => ({ ...p, testimonial: true }));
+    await new Promise(res => setTimeout(res, 1000)); // Simulate API call
+    toast.success('Thank you for your feedback!', { theme: 'dark' });
+    setTestimonial({ rating: 0, content: '' });
+    setLoading(p => ({ ...p, testimonial: false }));
   };
-  
+
+  const handleDeleteUser = async () => {  
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true);
+      return;
+    }
+    setLoading(p => ({ ...p, delete: true }));
+    try {
+      await deleteUser(currentUser.id);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Error deleting user", { theme: 'dark' });
+      setLoading(p => ({ ...p, delete: false }));
+    } 
+  };
+ 
+
   if (!currentUser) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-pulse flex flex-col items-center">
-          <div className="w-16 h-16 bg-gray-200 rounded-full mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-48 mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-32"></div>
-        </div>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-[50vh]"><Loader className="animate-spin h-8 w-8 text-gray-500"/></div>;
   }
   
+  const NavLink = ({ tabName, children }) => (
+    <button onClick={() => setActiveTab(tabName)} className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === tabName ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-900'}`}>
+      {children}
+    </button>
+  );
+
+  const PasswordInput = ({ id, value, placeholder, isVisible, onToggle, onChange }) => (
+    <div className="relative">
+      <input id={id} name={id} type={isVisible ? 'text' : 'password'} value={value} onChange={onChange} required minLength={6}
+        className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent pr-10"/>
+      <label htmlFor={id} className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">{placeholder}</label>
+      <button type="button" onClick={onToggle} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-white">
+        {isVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="text-center mb-10">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-1">Your Profile</h1>
-        <p className="text-gray-600">Manage your account information and settings</p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Profile Details Section */}
-        <div className="md:col-span-2">
-          <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6">
-            <div className="border-b border-gray-100 p-4 flex items-center">
-              <User className="h-5 w-5 text-blue-500 mr-2" />
-              <h2 className="text-lg font-semibold text-gray-800">Profile Details</h2>
-            </div>
-            
-            <form onSubmit={handleProfileUpdate} className="p-6">
-              <div className="mb-6">
-                <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="name">
-                  Full Name
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text" 
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  placeholder="Your full name"
-                />
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <header className="mb-8">
+        <h1 className="text-4xl font-bold text-white">Account Settings</h1>
+        <p className="text-gray-400 mt-1">Manage your account and security preferences.</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <aside className="md:col-span-1">
+          <nav className="space-y-1 bg-gray-950 border border-gray-800 p-2 rounded-xl">
+            <NavLink tabName="profile"><User size={16} /> Profile</NavLink>
+            <NavLink tabName="security"><Lock size={16} /> Security</NavLink>
+            <NavLink tabName="review"><Star size={16} /> My Review</NavLink>
+            <NavLink tabName="danger"><AlertTriangle size={16} /> Danger Zone</NavLink>
+          </nav>
+        </aside>
+
+        <main className="md:col-span-3">
+          <section className={`${activeTab === 'profile' ? 'block' : 'hidden'}`}>
+            <form onSubmit={handleProfileUpdate} className="bg-gray-950 border border-gray-800 rounded-2xl">
+              <div className="p-6 border-b border-gray-800">
+                <h2 className="text-xl font-semibold text-white">Personal Information</h2>
+                <p className="text-sm text-gray-400 mt-1">Update your public profile details.</p>
               </div>
-              
-              <div className="mb-6">
-                <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="email">
-                  Email Address
-                </label>
+              <div className="p-6 space-y-6">
+                 <div className="flex items-center gap-4">
+                    <div className="relative group w-20 h-20">
+                        <img 
+                            src={profileImagePreview || currentUser.profilePicture || `https://api.dicebear.com/7.x/initials/svg?seed=${currentUser.name}&backgroundColor=000000&textColor=ffffff`} 
+                            alt="Avatar" 
+                            className="w-20 h-20 rounded-full border-2 border-gray-700 object-cover"
+                        />
+                         <label htmlFor="avatar-upload" className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                            <Camera size={24} />
+                            <input type="file" id="avatar-upload" className="hidden" accept="image/png, image/jpeg" onChange={handleProfileImageChange} />
+                         </label>
+                    </div>
+                    <div>
+                        <p className="font-semibold text-white">{currentUser.name}</p>
+                        <p className="text-sm text-gray-500">Update your profile picture.</p>
+                        {profileImagePreview && (
+                            <div className="flex items-center gap-2 mt-2">
+                                <button type="button" onClick={handleImageUpload} disabled={loading.avatar} className="px-3 py-1 bg-white text-black rounded-md font-semibold text-xs hover:bg-gray-200 disabled:opacity-50 flex items-center gap-1">
+                                    {loading.avatar ? <><Loader className="animate-spin h-3 w-3"/> Saving...</> : 'Save Photo'}
+                                </button>
+                                <button type="button" onClick={() => setProfileImagePreview(null)} className="px-3 py-1 bg-gray-800 text-white rounded-md font-semibold text-xs hover:bg-gray-700">Cancel</button>
+                            </div>
+                        )}
+                    </div>
+                 </div>
                 <div className="relative">
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
-                    value={formData.email}
-                    disabled
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                    <Info className="h-4 w-4 text-gray-400" />
-                  </div>
+                  <input id="name" name="name" type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent"/>
+                  <label htmlFor="name" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Full Name</label>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Email cannot be changed for security reasons</p>
+                <div className="relative">
+                  <input id="email" type="email" value={formData.email} disabled className="w-full px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg text-gray-500 cursor-not-allowed"/>
+                  <label htmlFor="email" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1">Email (cannot be changed)</label>
+                </div>
               </div>
-              
-              <div className="flex flex-col space-y-3">
-                <button
-                  type="submit"
-                  className="w-full flex justify-center items-center bg-blue-600 text-white p-3 rounded-lg font-medium hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-5 w-5 mr-2" />
-                      Save Changes
-                    </>
-                  )}
+              <footer className="p-6 border-t border-gray-800 flex justify-end bg-gray-950/50 rounded-b-2xl">
+                <button type="submit" disabled={loading.profile} className="px-5 py-2.5 bg-white text-black rounded-lg font-semibold text-sm hover:bg-gray-200 transition disabled:opacity-50 flex items-center gap-2">
+                  {loading.profile ? <><Loader className="animate-spin h-4 w-4"/> Saving...</> : <><Save size={16}/> Save Changes</>}
                 </button>
-                
-                <button
-                  type="button"
-                  onClick={togglePasswordSection}
-                  className="w-full flex justify-center items-center bg-gray-100 text-gray-800 p-3 rounded-lg font-medium hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2"
-                >
-                  <Lock className="h-5 w-5 mr-2" />
-                  {showPasswordSection ? 'Hide Password Section' : 'Change Password'}
-                  {showPasswordSection ? (
-                    <ChevronUp className="h-4 w-4 ml-2" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 ml-2" />
-                  )}
-                </button>
-              </div>
+              </footer>
             </form>
-          </div>
-          
-          {/* Password Change Section - Conditionally rendered */}
-          {showPasswordSection && (
-            <div className="bg-white rounded-xl shadow-md overflow-hidden mb-6 transition-all duration-300">
-              <div className="border-b border-gray-100 p-4 flex items-center">
-                <Key className="h-5 w-5 text-green-500 mr-2" />
-                <h2 className="text-lg font-semibold text-gray-800">Change Password</h2>
+          </section>
+
+          {/* Security Section */}
+          <section className={`${activeTab === 'security' ? 'block' : 'hidden'}`}>
+            <form onSubmit={handlePasswordChange} className="bg-gray-950 border border-gray-800 rounded-2xl">
+              <div className="p-6 border-b border-gray-800">
+                <h2 className="text-xl font-semibold text-white">Password</h2>
+                <p className="text-sm text-gray-400 mt-1">Update your password. Make sure it's a strong one.</p>
               </div>
-              
-              <form onSubmit={handlePasswordChange} className="p-6">
-                <div className="mb-6">
-                  <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="currentPassword">
-                    Current Password
-                  </label>
-                  <input
-                    id="currentPassword"
-                    name="currentPassword"
-                    type="password"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                    value={formData.currentPassword}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                
-                <div className="mb-6">
-                  <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="newPassword">
-                    New Password
-                  </label>
-                  <input
-                    id="newPassword"
-                    name="newPassword"
-                    type="password"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                    value={formData.newPassword}
-                    onChange={handleChange}
-                    minLength={6}
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
-                </div>
-                
-                <div className="mb-6">
-                  <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="confirmPassword">
-                    Confirm Password
-                  </label>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    minLength={6}
-                    required
-                  />
-                </div>
-                
-                <button
-                  type="submit"
-                  className="w-full flex justify-center items-center bg-green-600 text-white p-3 rounded-lg font-medium hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                  disabled={isPasswordChanging}
-                >
-                  {isPasswordChanging ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Key className="h-5 w-5 mr-2" />
-                      Update Password
-                    </>
-                  )}
+              <div className="p-6 space-y-6">
+                <PasswordInput id="currentPassword" value={passwordData.currentPassword} placeholder="Current Password" isVisible={showPassword.current} onToggle={() => setShowPassword(p => ({...p, current: !p.current}))} onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})} />
+                <PasswordInput id="newPassword" value={passwordData.newPassword} placeholder="New Password" isVisible={showPassword.new} onToggle={() => setShowPassword(p => ({...p, new: !p.new}))} onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})} />
+                <PasswordInput id="confirmPassword" value={passwordData.confirmPassword} placeholder="Confirm New Password" isVisible={showPassword.confirm} onToggle={() => setShowPassword(p => ({...p, confirm: !p.confirm}))} onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})} />
+              </div>
+              <footer className="p-6 border-t border-gray-800 flex justify-end bg-gray-950/50 rounded-b-2xl">
+                <button type="submit" disabled={loading.password} className="px-5 py-2.5 bg-white text-black rounded-lg font-semibold text-sm hover:bg-gray-200 transition disabled:opacity-50 flex items-center gap-2">
+                  {loading.password ? <><Loader className="animate-spin h-4 w-4"/> Updating...</> : <>Update Password</>}
                 </button>
-              </form>
-            </div>
-          )}
-        </div>
-        
-        {/* Sidebar */}
-        <div className="md:col-span-1">
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            <div className="border-b border-gray-100 p-4 flex items-center">
-              <Info className="h-5 w-5 text-amber-500 mr-2" />
-              <h2 className="text-lg font-semibold text-gray-800">Account Info</h2>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div className="flex items-center">
-                <Shield className="h-5 w-5 text-gray-400 mr-3" />
-                <div>
-                  <p className="text-sm text-gray-500">Account Type</p>
-                  <p className="font-medium text-gray-800">
-                    {currentUser.role === 'admin' ? 'Administrator' : 'Standard User'}
-                  </p>
+              </footer>
+            </form>
+          </section>
+          
+           {/* My Review Section */}
+           <section className={`${activeTab === 'review' ? 'block' : 'hidden'}`}>
+             <form onSubmit={handleTestimonialSubmit} className="bg-gray-950 border border-gray-800 rounded-2xl">
+                <div className="p-6 border-b border-gray-800">
+                    <h2 className="text-xl font-semibold text-white">Share Your Experience</h2>
+                    <p className="text-sm text-gray-400 mt-1">Help others in the community by sharing your feedback on the platform.</p>
                 </div>
-              </div>
-              
-              <div className="flex items-center">
-                <Calendar className="h-5 w-5 text-gray-400 mr-3" />
-                <div>
-                  <p className="text-sm text-gray-500">Member Since</p>
-                  <p className="font-medium text-gray-800">
-                    {currentUser.createdAt 
-                      ? new Date(currentUser.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })
-                      : 'N/A'}
-                  </p>
+                <div className="p-6 space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">Your Rating</label>
+                      <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <button type="button" key={star} onClick={() => setTestimonial({...testimonial, rating: star})}>
+                            <Star className={`h-8 w-8 transition-colors ${testimonial.rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`} />
+                          </button>
+                        ))}
+                      </div>
+                  </div>
+                   <div className="relative">
+                    <textarea id="content" name="content" value={testimonial.content} onChange={(e) => setTestimonial({...testimonial, content: e.target.value})} rows="4" className="peer w-full px-4 py-3 bg-transparent border border-gray-700 rounded-lg placeholder-transparent" placeholder="Your review" required/>
+                    <label htmlFor="content" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Your review</label>
+                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                 <footer className="p-6 border-t border-gray-800 flex justify-end bg-gray-950/50 rounded-b-2xl">
+                    <button type="submit" disabled={loading.testimonial} className="px-5 py-2.5 bg-white text-black rounded-lg font-semibold text-sm hover:bg-gray-200 transition disabled:opacity-50 flex items-center gap-2">
+                        {loading.testimonial ? <><Loader className="animate-spin h-4 w-4"/> Submitting...</> : <>Submit Review</>}
+                    </button>
+                 </footer>
+             </form>
+           </section>
+
+           {/* Danger Zone Section */}
+           <section className={`${activeTab === 'danger' ? 'block' : 'hidden'}`}>
+             <div className="bg-gray-950 border border-red-500/30 rounded-2xl">
+                <div className="p-6 border-b border-red-500/30">
+                    <h2 className="text-xl font-semibold text-red-400">Danger Zone</h2>
+                    <p className="text-sm text-gray-400 mt-1">These actions are permanent and cannot be undone.</p>
+                </div>
+                <div className="p-6 flex flex-col md:flex-row md:items-center justify-between">
+                    <div>
+                        <p className="font-semibold text-white">Delete Account</p>
+                        <p className="text-sm text-gray-400 mt-1">Permanently remove your account and all associated data.</p>
+                    </div>
+                     <button onClick={handleDeleteUser} disabled={loading.delete} className="mt-4 md:mt-0 px-5 py-2.5 bg-red-600/20 text-red-400 border border-red-500/50 rounded-lg font-semibold text-sm hover:bg-red-600/30 hover:text-white transition disabled:opacity-50">
+                        {loading.delete ? 'Deleting...' : 'Delete My Account'}
+                     </button>
+                </div>
+             </div>
+           </section>
+        </main>
       </div>
     </div>
   );
 };
 
 export default Profile;
+

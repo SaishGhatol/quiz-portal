@@ -1,99 +1,120 @@
-// client/quiz/QuizCard.jsx
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // <--- Ensure this is imported
-import { Clock, Award, HelpCircle, ArrowRight } from 'lucide-react';
-import api from '../../utils/api';
+import React, { useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Clock, HelpCircle, ArrowRight, BookOpen } from 'lucide-react';
 
-const QuizCard = ({ quiz }) => {
-  const [questionCount, setQuestionCount] = useState(0);
-  const navigate = useNavigate(); // <--- Ensure this is initialized
+// A small, reusable Tag component for displaying category or difficulty.
+const Tag = ({ text, icon: Icon, className = '' }) => (
+  <div className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${className}`}>
+    {Icon && <Icon size={12} />}
+    <span>{text}</span>
+  </div>
+);
 
-  useEffect(() => {
-    const fetchQuestionCount = async () => {
-      if (quiz?._id) {
-        try {
-          const { data } = await api.get(`/quizzes/${quiz._id}/questions`);
-          setQuestionCount(data.questions.length);
-        } catch (err) {
-          console.error(`Error fetching questions for quiz ${quiz._id}:`, err);
-          setQuestionCount(0); // Set to 0 on error
-        }
-      }
-    };
-    fetchQuestionCount();
-  }, [quiz]);
+// Define default quiz data outside the component for cleaner code.
+const defaultQuiz = {
+  _id: 'default-id',
+  title: 'Discover Your Next Challenge',
+  description: 'Explore a wide variety of topics designed to test your knowledge and help you learn.',
+  difficulty: 'medium',
+  category: 'General',
+  estimatedTime: 10,
+  questionCount: 15,
+};
 
-  const difficultyConfig = {
-    easy: { color: 'bg-emerald-500/15 text-emerald-700', label: 'Easy' },
-    medium: { color: 'bg-amber-500/15 text-amber-700', label: 'Medium' },
-    hard: { color: 'bg-rose-500/15 text-rose-700',label:"Hard" }
+// Use default parameter for props instead of `defaultProps`.
+const QuizCard = ({ quiz = defaultQuiz }) => {
+  const navigate = useNavigate();
+  const cardRef = useRef(null);
+
+  // Mouse-tracking spotlight effect logic
+  const handleMouseMove = (e) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    cardRef.current.style.setProperty('--mouse-x', `${x}px`);
+    cardRef.current.style.setProperty('--mouse-y', `${y}px`);
   };
 
-  // --- UPDATED FUNCTION TO HANDLE CLICK AND NAVIGATE ---
-  const handleStartChallenge = () => {
-    // Navigate to the correct path as defined in App.js
+  // Navigate to the take quiz page (for the button)
+  const handleStartChallenge = (e) => {
+    e.preventDefault(); // Prevent the parent Link from navigating
+    e.stopPropagation(); // Stop the event from bubbling up
     navigate(`/quiz/${quiz._id}/take`);
   };
-  // --- END UPDATED FUNCTION ---
+
+  // Configuration for difficulty styles
+  const difficultyConfig = {
+    easy: { label: 'Easy', className: 'border-green-500/30 bg-green-500/10 text-green-400' },
+    medium: { label: 'Medium', className: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400' },
+    hard: { label: 'Hard', className: 'border-red-500/30 bg-red-500/10 text-red-400' },
+    default: { label: 'N/A', className: 'border-gray-500/30 bg-gray-500/10 text-gray-400' }
+  };
+  
+  const { label: diffLabel, className: diffClassName } = difficultyConfig[quiz.difficulty] || difficultyConfig.default;
+  const questionCount = quiz.questionCount || 0;
 
   return (
-    <article className="group relative bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] border border-gray-100 overflow-hidden">
-      <div className="absolute inset-0 pattern-dots pattern-gray-200 pattern-bg-transparent pattern-size-2 pattern-opacity-20 -z-0" />
+    // ENHANCEMENT: Replaced div with Link for better accessibility.
+    <Link
+      to={`/quiz/${quiz._id}`}
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      className="group relative block h-full w-full transform transition-transform duration-300 ease-out hover:-translate-y-2"
+    >
+      {/* --- Aurora Border Effect --- */}
+      <div
+        className="absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-70
+                   before:absolute before:inset-0 before:rounded-2xl 
+                   before:bg-[radial-gradient(500px_circle_at_var(--mouse-x)_var(--mouse-y),rgba(255,255,255,0.1),transparent_80%)] 
+                   pointer-events-none"
+        aria-hidden="true"
+      />
 
-      <div className="p-6 space-y-4 relative z-10 bg-white/95 hover:bg-white transition-colors">
-        <div className="flex items-start gap-3">
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-semibold text-gray-900 tracking-tight">
-                {quiz.title}
-              </h3>
-              <span className={`${difficultyConfig[quiz.difficulty].color} px-2.5 py-1 rounded-full text-xs font-medium border border-current/10`}>
-                {difficultyConfig[quiz.difficulty].label}
-              </span>
+      {/* --- Rebuilt with Flexbox for stable height --- */}
+      <article className="relative h-full flex flex-col bg-gray-950 border border-gray-800 rounded-xl p-6">
+        {/* This div will grow to fill available space, pushing the footer down */}
+        <div className="flex-grow">
+          <div className="flex items-center justify-between gap-4 mb-3">
+             <Tag text={quiz.category} icon={BookOpen} className="border-blue-500/30 bg-blue-500/10 text-blue-400" />
+             <Tag text={diffLabel} className={diffClassName} />
+          </div>
+          <h3 className="text-xl font-semibold text-white tracking-tight my-4">
+            {quiz.title}
+          </h3>
+          {/* Added min-h to prevent layout shifts with short descriptions */}
+          <p className="text-gray-400 text-sm leading-relaxed line-clamp-3 mb-4 min-h-[60px]">
+            {quiz.description}
+          </p>
+        </div>
+
+        {/* This footer content will now be perfectly aligned at the bottom of the card */}
+        <div>
+          <div className="flex items-center justify-between py-4 border-y border-gray-800 text-sm">
+            <div className="flex items-center gap-2 text-gray-500">
+              <HelpCircle className="h-4 w-4" />
+              <span className="font-medium text-gray-300">{questionCount} Questions</span>
             </div>
-            {quiz.category && (
-              <span className="inline-block px-2 py-1 bg-indigo-500/10 text-indigo-700 text-xs font-medium rounded-md mb-3">
-                {quiz.category}
-              </span>
+            {quiz.estimatedTime > 0 && (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Clock className="h-4 w-4" />
+                <span className="font-medium text-gray-300">{quiz.estimatedTime} min</span>
+              </div>
             )}
           </div>
+          <button
+            onClick={handleStartChallenge}
+            className="mt-6 w-full flex items-center justify-center gap-2 bg-white text-black 
+                       text-sm font-semibold py-3 rounded-lg transition-all duration-300
+                       shadow-[0_0_20px_rgba(255,255,255,0)] group-hover:shadow-[0_0_20px_rgba(255,255,255,0.2)]
+                       hover:!bg-gray-200"
+          >
+            Start Challenge
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </button>
         </div>
-
-        <p className="text-gray-600 text-sm leading-relaxed line-clamp-2">
-          {quiz.description}
-        </p>
-
-        <div className="grid grid-cols-3 gap-4 py-3 border-y border-gray-100">
-          <div className="flex items-center gap-1.5">
-            <HelpCircle className="h-4 w-4 text-gray-500 flex-shrink-0" />
-            <span className="text-sm font-medium text-gray-700">
-              {questionCount}
-              <span className="text-gray-500 ml-0.5">Questions</span>
-            </span>
-          </div>
-
-          {quiz.estimatedTime && (
-            <div className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-gray-500 flex-shrink-0" />
-              <span className="text-sm font-medium text-gray-700">
-                {quiz.estimatedTime}
-                <span className="text-gray-500 ml-0.5">min</span>
-              </span>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={handleStartChallenge}
-          className="flex items-center justify-center gap-2 w-full bg-gradient-to-br from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm font-semibold py-3 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
-        >
-          Start Challenge
-          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-        </button>
-      </div>
-
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 to-purple-50/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10" />
-    </article>
+      </article>
+    </Link>
   );
 };
 

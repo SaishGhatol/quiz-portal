@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, {useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../../utils/api';
 import AuthContext from '../../contexts/AuthContext';
-import {Loader} from "lucide-react";
+import { Loader, AlertTriangle, ArrowLeft, Play, Info, BookOpen, Clock, BarChart3, SearchX } from 'lucide-react';
+
 const QuizDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -11,191 +12,166 @@ const QuizDetail = () => {
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userAttempts, setUserAttempts] = useState([]);
-  const [attemptsLoading, setAttemptsLoading] = useState(false);
   const [questionCount, setQuestionCount] = useState(0);
 
   useEffect(() => {
-    const fetchQuiz = async () => {
+    const fetchQuizData = async () => {
       setLoading(true);
       try {
-        const response = await api.get(`/quizzes/${id}`);
-        setQuiz(response.data.quiz);
+        const [quizRes, questionsRes] = await Promise.all([
+          api.get(`/quizzes/${id}`),
+          api.get(`/quizzes/${id}/questions`)
+        ]);
+        setQuiz(quizRes.data.quiz);
+        setQuestionCount(questionsRes.data.questions.length);
         setError(null);
-      } catch (error) {
-        console.error('Error fetching quiz:', error);
-        const errorMessage = error.response?.data?.message || 'Failed to load quiz. Please try again later.';
+      } catch (err) {
+        console.error('Error fetching quiz details:', err);
+        const errorMessage = err.response?.data?.message || 'Failed to load quiz. It may not exist or an error occurred.';
         setError(errorMessage);
-        toast.error(errorMessage);
+        toast.error(errorMessage, { theme: 'dark' });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchQuiz();
+    fetchQuizData();
   }, [id]);
-
-  useEffect(() => {
-    const fetchQuestionCount = async () => {
-      if (id) {
-        try {
-          const questionsRes = await api.get(`/quizzes/${id}/questions`);
-          setQuestionCount(questionsRes.data.questions.length);
-        } catch (err) {
-          console.error(`Error fetching questions for quiz ${id}:`, err);
-          setQuestionCount(0);
-        }
-      }
-    };
-    
-    fetchQuestionCount();
-  }, [id]);
-
 
   const handleStartQuiz = () => {
     navigate(`/quiz/${id}/take`);
   };
 
-  const getDifficultyColor = (difficulty) => {
-    switch (difficulty?.toLowerCase()) {
-      case 'easy':
-        return 'bg-green-100 text-green-800';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'hard':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const difficultyConfig = {
+    easy: { label: 'Easy', className: 'border-green-500/50 bg-green-500/10 text-green-400' },
+    medium: { label: 'Medium', className: 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400' },
+    hard: { label: 'Hard', className: 'border-red-500/50 bg-red-500/10 text-red-400' },
   };
-
-  const formatDate = (dateString) => {
-    const options = { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-  };
-
   
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-64 bg-white rounded-lg shadow-md">
-        <div className="text-center p-10">
-          <Loader className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading your quiz Details...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-gray-500">
+        <Loader className="animate-spin h-8 w-8 mb-4" />
+        <p className="font-semibold text-lg">Loading Quiz Details...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center py-10 max-w-md mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-red-800 mb-2">Error</h3>
-          <p className="text-red-700">{error}</p>
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+          <div className="mx-auto bg-red-500/10 w-16 h-16 rounded-full flex items-center justify-center mb-4">
+            <AlertTriangle className="h-8 w-8 text-red-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-white mb-2">An Error Occurred</h3>
+          <p className="text-gray-500 mb-6">{error}</p>
+          <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
+            <ArrowLeft size={16} />
+            Back to Quizzes
+          </Link>
         </div>
-        <Link 
-          to="/quizzes" 
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors inline-flex items-center"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Quizzes
-        </Link>
       </div>
     );
   }
 
   if (!quiz) {
     return (
-      <div className="text-center py-10 max-w-md mx-auto">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-yellow-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M12 14a2 2 0 100-4 2 2 0 000 4z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-yellow-800 mb-2">Quiz Not Found</h3>
-          <p className="text-yellow-700">The quiz you're looking for doesn't exist or has been removed.</p>
+       <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+          <div className="mx-auto bg-gray-800 w-16 h-16 rounded-full flex items-center justify-center mb-4">
+            <SearchX className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-semibold text-white mb-2">Quiz Not Found</h3>
+          <p className="text-gray-500 mb-6">The quiz you are looking for does not exist or may have been moved.</p>
+          <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
+            <ArrowLeft size={16} />
+            Browse Other Quizzes
+          </Link>
         </div>
-        <Link 
-          to="/quizzes" 
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors inline-flex items-center"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Browse Quizzes
-        </Link>
       </div>
     );
   }
 
+  const { label: diffLabel, className: diffClassName } = difficultyConfig[quiz.difficulty] || { label: 'N/A', className: 'border-gray-500/50 bg-gray-500/10 text-gray-400' };
+
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold">{quiz.title}</h1>
-            <span className={`text-sm font-semibold px-3 py-1 rounded-full w-fit ${getDifficultyColor(quiz.difficulty)}`}>
-              {quiz.difficulty || 'Unknown difficulty'}
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Immersive Header */}
+      <div className="relative bg-gray-950 border border-gray-800 rounded-2xl p-8 md:p-12 mb-8 overflow-hidden">
+         <div className="absolute inset-0 w-full h-full bg-[radial-gradient(#2d2d2d_1px,transparent_1px)] [background-size:24px_24px] opacity-30 pointer-events-none"></div>
+         <div className="relative z-10">
+            <Link to="/quizzes" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-4">
+              <ArrowLeft size={16} />
+              Back to All Quizzes
+            </Link>
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${diffClassName} mb-4 block w-fit`}>
+              {diffLabel}
             </span>
-          </div>
-          
-          <p className="text-gray-700 mb-6">{quiz.description}</p>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-50 p-4 rounded-md">
-              <div className="text-sm text-gray-500">Category</div>
-              <div className="font-medium">{quiz.category || 'Uncategorized'}</div>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-md">
-              <div className="text-sm text-gray-500">Number of Questions</div>
-              <div className="font-medium">{questionCount}</div>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-md">
-              <div className="text-sm text-gray-500">Time Limit</div>
-              <div className="font-medium">{quiz.timeLimit ? `${quiz.timeLimit} minutes` : 'No time limit'}</div>
-            </div>
-          </div>
-          
-          {currentUser ? (
-            <div className="space-y-6">
-              <button
-                onClick={handleStartQuiz}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-md font-medium w-full sm:w-auto flex justify-center items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Start Quiz
-              </button>
-            
-            </div>
-          ) : (
-            <div className="bg-blue-50 p-4 rounded-md flex items-start space-x-3">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="text-blue-700">
-                  Please <Link to="/login" className="font-bold underline">log in</Link> to take this quiz and track your progress.
-                </p>
+            <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">{quiz.title}</h1>
+            <p className="mt-4 text-lg text-gray-400 max-w-3xl">{quiz.description}</p>
+         </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        
+        {/* Left Column: Details */}
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6">
+              <h2 className="text-2xl font-semibold text-white mb-4">Quiz Overview</h2>
+              {/* Icon-driven metadata */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-800">
+                  <div className="flex items-center gap-3 text-gray-400 mb-2">
+                    <BookOpen size={16} /> <span className="text-sm font-medium">Category</span>
+                  </div>
+                  <p className="font-semibold text-white">{quiz.category || 'Uncategorized'}</p>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-800">
+                  <div className="flex items-center gap-3 text-gray-400 mb-2">
+                    <BarChart3 size={16} /> <span className="text-sm font-medium">Questions</span>
+                  </div>
+                  <p className="font-semibold text-white">{questionCount} items</p>
+                </div>
+                <div className="bg-gray-900 p-4 rounded-lg border border-gray-800">
+                  <div className="flex items-center gap-3 text-gray-400 mb-2">
+                    <Clock size={16} /> <span className="text-sm font-medium">Time Limit</span>
+                  </div>
+                  <p className="font-semibold text-white">{quiz.timeLimit ? `${quiz.timeLimit} minutes` : 'No limit'}</p>
+                </div>
               </div>
-            </div>
-          )}
+          </div>
         </div>
+
+        {/* Right Column: Sticky Action Panel */}
+        <div className="lg:col-span-1 lg:sticky top-24">
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6">
+            <h2 className="text-2xl font-semibold text-white mb-6">Ready to Start?</h2>
+            {currentUser ? (
+              <div className="space-y-4">
+                <button
+                  onClick={handleStartQuiz}
+                  className="w-full flex items-center justify-center gap-3 py-3 px-4 text-base font-semibold rounded-lg text-black bg-white hover:bg-gray-200 transition-transform duration-200 hover:scale-105"
+                >
+                  <Play size={18} />
+                  Begin Challenge
+                </button>
+                <p className="text-xs text-gray-500 text-center">Your results will be saved to your dashboard upon completion.</p>
+              </div>
+            ) : (
+              <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 flex items-start gap-3">
+                <Info size={18} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-gray-300">
+                    <Link to="/login" state={{ from: location }} className="font-semibold text-white underline hover:text-gray-200">Log in</Link> or <Link to="/register" className="font-semibold text-white underline hover:text-gray-200">sign up</Link> to take this quiz and track your progress.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
       </div>
     </div>
   );
