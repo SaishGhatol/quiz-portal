@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import AuthContext from '../../contexts/AuthContext';
 import { Loader, AlertTriangle, SearchX, ArrowLeft, Award, CheckCircle2, XCircle, Clock, ChevronDown, BarChart3, Repeat, Printer, Star } from "lucide-react";
 import confetti from 'canvas-confetti';
 import { useReactToPrint } from 'react-to-print';
@@ -72,60 +73,66 @@ const Certificate = ({ quizTitle, userName, scorePercentage, completionDate, onB
   });
 
   return (
-    <div className="bg-gray-950 min-h-screen py-12 px-4 flex flex-col items-center justify-center animate-fade-in">
-      {/* Buttons - NOT included in print */}
-      <div className="w-full max-w-5xl mx-auto flex justify-between items-center mb-8 print:hidden">
-        <button onClick={onBack} className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 font-semibold transition-all transform hover:scale-105">
-          <ArrowLeft size={16} />
-          Back to Results
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 py-12 px-4 flex flex-col items-center">
+      {/* Controls — hidden when printing */}
+      <div className="w-full max-w-4xl flex justify-between items-center mb-6 print:hidden">
+        <button onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-100 dark:bg-gray-800 text-sm font-semibold rounded-lg transition-colors">
+          <ArrowLeft size={16} /> Back to Results
         </button>
-        <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-all transform hover:scale-105">
-          <Printer size={16} />
-          Print / Download PDF
+        <button onClick={handlePrint}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-sm font-semibold rounded-lg transition-colors">
+          <Printer size={16} /> Print / Save as PDF
         </button>
       </div>
 
-      {/* Certificate - ONLY this div will be printed */}
-      <div 
-        ref={certificateRef} 
-        className="bg-white border-4 border-yellow-500 p-12 max-w-4xl w-full aspect-[1.414/1] flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden print:shadow-none print:max-w-none print:w-full print:h-full print:aspect-auto"
-        style={{
-          background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
-          printColorAdjust: 'exact',
-          WebkitPrintColorAdjust: 'exact'
-        }}
+      {/* The printable certificate */}
+      <div
+        ref={certificateRef}
+        className="bg-white w-full max-w-4xl shadow-xl rounded-lg overflow-hidden print:shadow-none print:rounded-none print:max-w-none"
+        style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
       >
-        {/* Background decoration */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-8 left-8 text-6xl text-yellow-500">★</div>
-          <div className="absolute top-8 right-8 text-6xl text-yellow-500">★</div>
-          <div className="absolute bottom-8 left-8 text-6xl text-yellow-500">★</div>
-          <div className="absolute bottom-8 right-8 text-6xl text-yellow-500">★</div>
-        </div>
-        
-        {/* Certificate content */}
-        <div className="flex items-center gap-4 text-yellow-600 z-10 mb-8">
-          <Star size={32} />
-          <h1 className="text-4xl font-serif font-bold text-gray-800">Certificate of Achievement</h1>
-          <Star size={32} />
-        </div>
-        
-        <p className="text-xl text-gray-600 z-10 mb-6">This certificate is proudly presented to</p>
-        <p className="text-5xl font-extrabold text-gray-800 my-8 font-sans z-10 border-b-2 border-yellow-500 pb-4">{userName}</p>
-        <p className="text-xl text-gray-600 z-10 mb-2">for successfully completing the quiz</p>
-        <p className="text-3xl font-bold text-yellow-600 mt-2 z-10 mb-8">{quizTitle}</p>
-        <p className="text-lg text-gray-600 z-10">
-          with a score of <span className="font-bold text-gray-800 text-xl">{scorePercentage}%</span> on <span className="font-bold text-gray-800">{formattedDate}</span>
-        </p>
-        
-        <div className="mt-16 w-full flex justify-center z-10">
-          <div className="text-center">
-            <div className="border-t-2 border-gray-400 pt-2 px-12">
-              <p className="text-lg font-semibold text-gray-800">Quiz Portal</p>
-              <p className="text-sm text-gray-500">Authorized Issuer</p>
+        {/* Gold top border */}
+        <div className="h-3" style={{ background: 'linear-gradient(90deg, #b45309, #d97706, #b45309)' }} />
+
+        <div className="px-12 py-12 text-center">
+          {/* Header */}
+          <div className="flex items-center justify-center gap-3 mb-8">
+            <Star size={24} className="text-amber-500 fill-amber-500" />
+            <h1 className="text-2xl font-bold tracking-widest text-gray-700 uppercase">Certificate of Achievement</h1>
+            <Star size={24} className="text-amber-500 fill-amber-500" />
+          </div>
+
+          {/* Presented to */}
+          <p className="text-gray-500 text-base mb-3">This certificate is proudly presented to</p>
+          <p className="text-5xl font-bold text-gray-900 mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+            {userName}
+          </p>
+          <div className="w-48 h-0.5 bg-amber-500 mx-auto mb-6" />
+
+          {/* Quiz info */}
+          <p className="text-gray-500 mb-2">for successfully completing</p>
+          <p className="text-2xl font-bold text-amber-700 mb-6">"{quizTitle}"</p>
+          <p className="text-gray-600 text-base">
+            with a score of{' '}
+            <span className="font-bold text-gray-900 text-xl">{scorePercentage}%</span>
+            {' '}on{' '}
+            <span className="font-semibold text-gray-800">{formattedDate}</span>
+          </p>
+
+          {/* Signature */}
+          <div className="mt-14 flex justify-center">
+            <div className="text-center">
+              <div className="w-40 border-t border-gray-400 pt-2 mx-auto">
+                <p className="text-sm font-semibold text-gray-700">Quiz Portal</p>
+                <p className="text-xs text-gray-400">Authorised Issuer</p>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Gold bottom border */}
+        <div className="h-3" style={{ background: 'linear-gradient(90deg, #b45309, #d97706, #b45309)' }} />
       </div>
     </div>
   );
@@ -133,6 +140,7 @@ const Certificate = ({ quizTitle, userName, scorePercentage, completionDate, onB
 
 const QuizResults = () => {
   const { attemptId } = useParams();
+  const { currentUser } = useContext(AuthContext);
   const [attempt, setAttempt] = useState(null);
   const [quiz, setQuiz] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -140,8 +148,6 @@ const QuizResults = () => {
   const [error, setError] = useState(null);
   const [showAnswers, setShowAnswers] = useState(false);
   const [showCertificate, setShowCertificate] = useState(false);
-
-  const PASSING_SCORE = 80;
 
   useEffect(() => {
     const fetchAttemptDetails = async () => {
@@ -163,7 +169,9 @@ const QuizResults = () => {
   }, [attemptId]);
 
   const scorePercentage = attempt?.maxScore > 0 ? Math.round((attempt.score / attempt.maxScore) * 100) : 0;
-  const hasPassed = scorePercentage >= PASSING_SCORE;
+  // Use the quiz's own passScore (percentage); default to 40 if not set
+  const passingThreshold = quiz?.passScore ?? 40;
+  const hasPassed = scorePercentage >= passingThreshold;
 
   // +++ NEW: Trigger confetti on pass +++
   useEffect(() => {
@@ -197,9 +205,9 @@ const QuizResults = () => {
   if (error) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
-      <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+      <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
         <AlertTriangle className="h-12 w-12 text-red-500/50 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-white mb-2">Error Loading Results</h3>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Error Loading Results</h3>
         <p className="text-gray-500 mb-6">{error}</p>
         <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
           <ArrowLeft size={16} />
@@ -212,9 +220,9 @@ const QuizResults = () => {
 
   if (!attempt) {
     return (   <div className="min-h-[50vh] flex items-center justify-center">
-      <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
+      <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
         <SearchX className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-white mb-2">Attempt Not Found</h3>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Attempt Not Found</h3>
         <p className="text-gray-500 mb-6">We couldn't find any data for this quiz attempt.</p>
         <Link to="/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
           <ArrowLeft size={16} />
@@ -257,7 +265,7 @@ const QuizResults = () => {
     return (
       <Certificate
         quizTitle={quiz.title}
-        userName="Alex Doe" 
+        userName={currentUser?.name || 'Quiz Taker'}
         scorePercentage={scorePercentage}
         completionDate={attempt.completedAt}
         onBack={() => setShowCertificate(false)}
@@ -266,18 +274,19 @@ const QuizResults = () => {
   }
 
   // Determine colors based on score
-  const scoreColor = scorePercentage >= 80 ? 'text-green-400' : scorePercentage >= 50 ? 'text-yellow-400' : 'text-red-400';
-  const scoreStroke = scorePercentage >= 80 ? 'stroke-green-500' : scorePercentage >= 50 ? 'stroke-yellow-500' : 'stroke-red-500';
+  const scoreColor = scorePercentage >= 80 ? 'text-green-500 dark:text-green-400' : scorePercentage >= 50 ? 'text-amber-500 dark:text-yellow-400' : 'text-red-500 dark:text-red-400';
+  const scoreStroke = scorePercentage >= 80 ? 'stroke-green-500' : scorePercentage >= 50 ? 'stroke-amber-500' : 'stroke-red-500';
   const shadowColor = hasPassed ? 'shadow-green-500/20' : 'shadow-gray-500/10';
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 animate-fade-in">
+    <div className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-950 py-8 px-4">
+    <div className="max-w-4xl mx-auto animate-fade-in">
       <div className="text-center mb-8">
-        <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight">{quiz.title}</h1>
-        <p className="mt-2 text-lg text-gray-400">Here's your performance breakdown.</p>
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white leading-tight">{quiz.title}</h1>
+        <p className="mt-2 text-gray-500 dark:text-gray-400">Here's your performance breakdown.</p>
       </div>
 
-      <div className={`bg-gradient-to-br from-gray-900 to-gray-950 border border-gray-800 rounded-3xl p-6 md:p-8 mb-8 shadow-2xl ${shadowColor} transition-shadow duration-500`}>
+      <div className={`bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-3xl p-6 md:p-8 mb-8 shadow-sm`}>
         <div className="grid md:grid-cols-5 gap-8 items-center">
           <div className="md:col-span-2 flex flex-col items-center justify-center">
             <div className="relative h-48 w-48">
@@ -291,7 +300,7 @@ const QuizResults = () => {
                     </feMerge>
                   </filter>
                 </defs>
-                <circle cx="50" cy="50" r="45" strokeWidth="10" fill="none" className="stroke-gray-800" />
+                <circle cx="50" cy="50" r="45" strokeWidth="10" fill="none" className="stroke-gray-200 dark:stroke-gray-800" />
                 <circle
                   cx="50" cy="50" r="45" strokeWidth="10" fill="none"
                   className={`${scoreStroke} transition-all duration-1000 ease-out`}
@@ -301,50 +310,48 @@ const QuizResults = () => {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-5xl font-bold text-white drop-shadow-lg">{animatedScore}%</span>
-                <span className="text-sm text-gray-400 mt-1">Score</span>
+                <span className="text-4xl font-bold text-gray-900 dark:text-white">{animatedScore}%</span>
+                <span className="text-xs text-gray-400 mt-1">Score</span>
               </div>
             </div>
-             <p className={`mt-4 text-2xl font-semibold ${scoreColor}`}>
-              {scorePercentage >= 80 ? "Excellent Work! 🎉" : scorePercentage >= 50 ? "Good Effort!" : "Keep Practicing!"}
+             <p className={`mt-3 text-lg font-semibold ${scoreColor}`}>
+              {scorePercentage >= 80 ? "Excellent Work! 🎉" : scorePercentage >= 50 ? "Good Effort! 👍" : "Keep Practicing! 💪"}
             </p>
           </div>
           <div className="md:col-span-3 grid grid-cols-2 gap-4">
-            <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-green-500/50 hover:bg-gray-800/50">
-              <div className="flex items-center gap-3 text-green-400 mb-2"><CheckCircle2 size={20} /> <span className="text-sm font-medium text-gray-400">Correct</span></div>
-              <p className="font-semibold text-3xl text-white">{animatedCorrect} <span className="text-base text-gray-500">/{questions.length}</span></p>
+            <div className="bg-gray-50 dark:bg-gray-800/60 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 text-green-500 mb-2"><CheckCircle2 size={16} /><span className="text-xs font-medium text-gray-500 dark:text-gray-400">Correct</span></div>
+              <p className="font-bold text-2xl text-gray-900 dark:text-white">{animatedCorrect} <span className="text-sm text-gray-400">/{questions.length}</span></p>
             </div>
-             <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-red-500/50 hover:bg-gray-800/50">
-              <div className="flex items-center gap-3 text-red-400 mb-2"><XCircle size={20} /> <span className="text-sm font-medium text-gray-400">Incorrect</span></div>
-              <p className="font-semibold text-3xl text-white">{animatedIncorrect} <span className="text-base text-gray-500">/{questions.length}</span></p>
+            <div className="bg-gray-50 dark:bg-gray-800/60 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 text-red-500 mb-2"><XCircle size={16} /><span className="text-xs font-medium text-gray-500 dark:text-gray-400">Incorrect</span></div>
+              <p className="font-bold text-2xl text-gray-900 dark:text-white">{animatedIncorrect} <span className="text-sm text-gray-400">/{questions.length}</span></p>
             </div>
-             <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-yellow-500/50 hover:bg-gray-800/50">
-              <div className="flex items-center gap-3 text-yellow-400 mb-2"><Award size={20} /> <span className="text-sm font-medium text-gray-400">Points</span></div>
-              <p className="font-semibold text-3xl text-white">{animatedPoints} <span className="text-base text-gray-500">/{attempt.maxScore}</span></p>
+            <div className="bg-gray-50 dark:bg-gray-800/60 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 text-amber-500 mb-2"><Award size={16} /><span className="text-xs font-medium text-gray-500 dark:text-gray-400">Points</span></div>
+              <p className="font-bold text-2xl text-gray-900 dark:text-white">{animatedPoints} <span className="text-sm text-gray-400">/{attempt.maxScore}</span></p>
             </div>
-             <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800/80 transition-all hover:border-blue-500/50 hover:bg-gray-800/50">
-              <div className="flex items-center gap-3 text-blue-400 mb-2"><Clock size={20} /> <span className="text-sm font-medium text-gray-400">Time</span></div>
-              <p className="font-semibold text-3xl text-white">{formatTime(timeTakenMs)}</p>
+            <div className="bg-gray-50 dark:bg-gray-800/60 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2 text-blue-500 mb-2"><Clock size={16} /><span className="text-xs font-medium text-gray-500 dark:text-gray-400">Time</span></div>
+              <p className="font-bold text-2xl text-gray-900 dark:text-white">{formatTime(timeTakenMs)}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-center flex-wrap gap-4 mb-10">
+      <div className="flex justify-center flex-wrap gap-3 mb-8">
         {hasPassed && (
-          <button onClick={() => setShowCertificate(true)} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg hover:shadow-yellow-500/30">
-            <Award size={18} />
-            View Certificate
+          <button onClick={() => setShowCertificate(true)} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 dark:text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity shadow-md">
+            <Award size={16} /> View Certificate
           </button>
         )}
-        <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg font-semibold transition-all transform hover:scale-105 hover:bg-gray-700">
-          <BarChart3 size={18} />
+        <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <BarChart3 size={16} />
           {showAnswers ? 'Hide' : 'Review'} Answers
-          <ChevronDown size={18} className={`transition-transform ${showAnswers ? 'rotate-180' : ''}`} />
+          <ChevronDown size={16} className={`transition-transform ${showAnswers ? 'rotate-180' : ''}`} />
         </button>
-        <Link to={`/quiz/${quiz._id}`} className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg font-semibold transition-all transform hover:scale-105 hover:bg-gray-700">
-          <Repeat size={18} />
-          Try Again
+        <Link to={`/quiz/${quiz._id}`} className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <Repeat size={16} /> Try Again
         </Link>
       </div>
 
@@ -392,33 +399,32 @@ const QuizResults = () => {
       </div>
 
       {showAnswers && (
-        <div className="space-y-4 animate-fade-in-up">
-          <h2 className="text-3xl font-bold text-white text-center">Detailed Review</h2>
+        <div className="space-y-4 animate-fade-up">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white text-center">Detailed Review</h2>
           {questions.map((question, index) => {
             const userAnswer = attempt.answers.find(a => a.questionId === question._id);
             const isCorrect = userAnswer?.isCorrect || false;
-
             return (
-              <div key={question._id} className={`bg-gray-950/80 border-l-4 rounded-r-lg p-5 transition-colors ${isCorrect ? 'border-green-500' : 'border-red-500'}`}>
-                <p className="font-semibold text-white mb-4 text-lg">
-                  <span className="text-gray-500 mr-2">{index + 1}.</span>{question.text}
+              <div key={question._id} className={`bg-white dark:bg-gray-900 border-l-4 border rounded-r-2xl p-5 ${isCorrect ? 'border-l-green-500 border-gray-100 dark:border-gray-800' : 'border-l-red-500 border-gray-100 dark:border-gray-800'}`}>
+                <p className="font-semibold text-gray-900 dark:text-white mb-4">
+                  <span className="text-gray-400 mr-2">{index + 1}.</span>{question.text}
                 </p>
-                <div className="space-y-3 pl-7">
-                  <div className={`border border-transparent p-3 rounded-lg flex items-start gap-3 ${isCorrect ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                    {isCorrect ? <CheckCircle2 size={20} className="text-green-400 mt-0.5 flex-shrink-0" /> : <XCircle size={20} className="text-red-400 mt-0.5 flex-shrink-0" />}
+                <div className="space-y-2 pl-5">
+                  <div className={`p-3 rounded-xl flex items-start gap-3 ${isCorrect ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                    {isCorrect ? <CheckCircle2 size={16} className="text-green-500 mt-0.5 shrink-0" /> : <XCircle size={16} className="text-red-500 mt-0.5 shrink-0" />}
                     <div>
-                      <p className="text-sm font-medium text-gray-400">Your Answer</p>
-                      <p className="text-white text-base">{userAnswer ? getOptionText(question._id, userAnswer.selectedOptionId) : 'Not Answered'}</p>
+                      <p className="text-xs font-medium text-gray-400 mb-0.5">Your Answer</p>
+                      <p className="text-sm text-gray-900 dark:text-white">{userAnswer ? getOptionText(question._id, userAnswer.selectedOptionId) : 'Not Answered'}</p>
                     </div>
                   </div>
                   {!isCorrect && (
-                     <div className="border border-transparent p-3 rounded-lg bg-green-500/10 flex items-start gap-3">
-                       <CheckCircle2 size={20} className="text-green-400 mt-0.5 flex-shrink-0" />
-                       <div>
-                         <p className="text-sm font-medium text-gray-400">Correct Answer</p>
-                         <p className="text-white text-base">{getCorrectOptionText(question._id)}</p>
-                       </div>
-                     </div>
+                    <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-start gap-3">
+                      <CheckCircle2 size={16} className="text-green-500 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-medium text-gray-400 mb-0.5">Correct Answer</p>
+                        <p className="text-sm text-gray-900 dark:text-white">{getCorrectOptionText(question._id)}</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -426,6 +432,7 @@ const QuizResults = () => {
           })}
         </div>
       )}
+    </div>
     </div>
   );
 };

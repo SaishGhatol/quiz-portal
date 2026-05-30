@@ -30,16 +30,16 @@ exports.startAttempt = async (req, res) => {
       });
     }
     
-    if (!quiz.isActive && req.user.role !== 'admin') {
-      return res.status(403).json({ 
+    if (!quiz.isActive && req.userRole !== 'admin') {
+      return res.status(403).json({
         success: false,
-        message: 'This quiz is not active' 
+        message: 'This quiz is not active'
       });
     }
-    
+
     // Check if user already has an incomplete attempt for this quiz
     const existingAttempt = await Attempt.findOne({
-      user: req.user.id,
+      user: req.userId,
       quiz: quizId,
       completedAt: null
     });
@@ -58,7 +58,7 @@ exports.startAttempt = async (req, res) => {
     
     // Create new attempt
     const attempt = new Attempt({
-      user: req.user.id,
+      user: req.userId,
       quiz: quizId,
       maxScore,
       startedAt: new Date(),
@@ -114,10 +114,10 @@ exports.submitAnswer = async (req, res) => {
     }
     
     // Verify user owns this attempt
-    if (attempt.user.toString() !== req.user.id) {
-      return res.status(403).json({ 
+    if (attempt.user.toString() !== req.userId) {
+      return res.status(403).json({
         success: false,
-        message: 'Not authorized to submit to this attempt' 
+        message: 'Not authorized to submit to this attempt'
       });
     }
     
@@ -253,10 +253,10 @@ exports.completeAttempt = async (req, res) => {
     }
     
     // Verify user owns this attempt
-    if (attempt.user.toString() !== req.user.id) {
-      return res.status(403).json({ 
+    if (attempt.user.toString() !== req.userId) {
+      return res.status(403).json({
         success: false,
-        message: 'Not authorized to complete this attempt' 
+        message: 'Not authorized to complete this attempt'
       });
     }
     
@@ -287,8 +287,11 @@ exports.completeAttempt = async (req, res) => {
         message: 'Quiz associated with this attempt not found'
       });
     }
-    
-    const isPassed = attempt.score >= quiz.passScore;
+
+    const percentScore = attempt.maxScore > 0
+      ? (attempt.score / attempt.maxScore) * 100
+      : 0;
+    const isPassed = percentScore >= quiz.passScore;
     const completedAttempt = await attempt.save();
     
     res.json({
@@ -324,7 +327,7 @@ exports.getUserAttempts = async (req, res) => {
     } = req.query;
 
     // Build base query
-    const query = { user: req.user };
+    const query = { user: req.userId };
 
     // Validate and add quiz filter
     if (quiz) {
@@ -507,7 +510,7 @@ exports.getAllAttempts = async (req, res) => {
 
 exports.getRecentAttempts = async (req, res) => {
   try {
-    const {quizId} = req.params.id;
+    const quizId = req.params.id;
     const limit = parseInt(req.query.limit) || 10;
 
     // Verify the quiz ID is valid
@@ -588,8 +591,8 @@ exports.getQuizStats = async (req, res) => {
     }
     
     // Check authorization for non-public stats
-    const isAuthorized = req.user.role === 'admin' || 
-                         (quiz.createdBy && quiz.createdBy.toString() === req.user.id);
+    const isAuthorized = req.userRole === 'admin' ||
+                         (quiz.createdBy && quiz.createdBy.toString() === req.userId);
     
     // Get basic stats
     const totalAttempts = await Attempt.countDocuments({ quiz: quizId });
@@ -737,7 +740,7 @@ exports.deleteAttempt = async (req, res) => {
     }
     
     // Check if user is admin
-    if (req.user.role !== 'admin') {
+    if (req.userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete attempts'

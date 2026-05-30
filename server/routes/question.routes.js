@@ -1,54 +1,49 @@
-const express = require('express');
+const express            = require('express');
 const questionController = require('../controllers/question.controller');
 const { authenticateJWT } = require('../middleware/auth.middleware');
-const { validate, handleValidationErrors } = require('../middleware/validation.middleware');
-
 
 const router = express.Router();
 
-// Question routes
-router.post('/', authenticateJWT, questionController.createQuestion);
-router.post('/bulk', authenticateJWT, questionController.bulkCreateQuestions);
-router.get('/quiz/:quizId', authenticateJWT, questionController.getQuestionsByQuiz);
-router.put('/:id', authenticateJWT, questionController.updateQuestion);
-router.delete('/:id', authenticateJWT, questionController.deleteQuestion);
-router.get('/quizzes/:quizId/questions', authenticateJWT, questionController.getQuestionsByQuiz);
+// All question routes are now mounted at /api/questions
+// (previously mounted at /api which caused conflicts with /api/org etc.)
 
-// Create a new question
-router.post('/quizzes/:id/questions', authenticateJWT, (req, res, next) => {
-  // Extract quiz ID from URL parameters and add to body
+// Single question CRUD
+router.post('/',       questionController.createQuestion);
+router.post('/bulk',   questionController.bulkCreateQuestions);
+router.get('/:id',     questionController.getQuestionsByQuiz);   // get by quiz id
+router.put('/:id',     questionController.updateQuestion);
+router.delete('/:id',  questionController.deleteQuestion);
+
+// Nested: questions for a specific quiz
+router.get('/quiz/:quizId',  questionController.getQuestionsByQuiz);
+
+// Nested quiz question routes (kept for backward compat)
+router.post('/quizzes/:id/questions', (req, res, next) => {
   req.body.quizId = req.params.id;
   next();
 }, questionController.createQuestion);
 
-// Update a question
-router.put('/quizzes/:id/questions/:questionId', authenticateJWT, (req, res) => {
-  // Call the existing controller with the question ID
+router.put('/quizzes/:id/questions/:questionId', (req, res) => {
   req.params.id = req.params.questionId;
   questionController.updateQuestion(req, res);
 });
 
-// Delete a question
-router.delete('/quizzes/:id/questions/:questionId', authenticateJWT, (req, res) => {
-  // Call the existing controller with the question ID
+router.delete('/quizzes/:id/questions/:questionId', (req, res) => {
   req.params.id = req.params.questionId;
   questionController.deleteQuestion(req, res);
 });
 
-// Bulk create questions
-router.post('/quizzes/:id/questions/bulk', authenticateJWT, (req, res, next) => {
-  // Extract quiz ID from URL parameters and add to body
+router.post('/quizzes/:id/questions/bulk', (req, res, next) => {
   req.body.quizId = req.params.id;
   next();
 }, questionController.bulkCreateQuestions);
 
-// Add reorder function (this needs to be added to your controller)
-router.put('/quizzes/:id/questions/:questionId/reorder', authenticateJWT, (req, res) => {
-  // Since you don't have this yet, we'll forward to a new controller method
+router.put('/quizzes/:id/questions/:questionId/reorder', (req, res) => {
   if (typeof questionController.reorderQuestion === 'function') {
     questionController.reorderQuestion(req, res);
   } else {
-    res.status(501).json({ message: 'Reordering functionality not implemented yet' });
+    res.status(501).json({ message: 'Reorder not implemented' });
   }
 });
+
 module.exports = router;

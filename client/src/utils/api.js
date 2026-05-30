@@ -34,20 +34,13 @@ api.interceptors.response.use(
       const { status, data } = error.response;
       
       if (status === 401) {
-        console.log('Authentication error:', data.message || 'Unknown auth error');
-        
-        // Clear token on any 401 error
         localStorage.removeItem('token');
-        
-        // Only redirect for specific cases to avoid redirect loops
+
         if (
-          !window.location.pathname.includes('/login') && 
+          !window.location.pathname.includes('/login') &&
           !window.location.pathname.includes('/register')
         ) {
-          // Use timeout to allow current code to finish execution
-          setTimeout(() => {
-            window.location.href = '/login?reason=session_expired';
-          }, 100000000000);
+          window.location.href = '/login?reason=session_expired';
         }
       }
     }

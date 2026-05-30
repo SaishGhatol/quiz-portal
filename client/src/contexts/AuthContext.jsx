@@ -1,90 +1,103 @@
-// src/contexts/AuthContext.js
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [loading, setLoading] = useState(true);
+  const [token,       setToken]       = useState(localStorage.getItem('token'));
+  const [loading,     setLoading]     = useState(true);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  const applyToken = (tkn) => {
+    if (tkn) {
+      localStorage.setItem('token', tkn);
+      api.defaults.headers.common['Authorization'] = `Bearer ${tkn}`;
+    } else {
+      localStorage.removeItem('token');
+      delete api.defaults.headers.common['Authorization'];
+    }
+    setToken(tkn);
+  };
+
+  // Re-fetch the current user from the server — call this after org create/join
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setCurrentUser(res.data.user);
+      return res.data.user;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // ── Boot — load user from stored token ───────────────────────────────────────
 
   useEffect(() => {
-    // Fetch user data if token exists
-    const fetchCurrentUser = async () => {
+    const boot = async () => {
       if (token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         try {
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          const response = await api.get('/auth/me');
-          setCurrentUser(response.data.user);
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-          localStorage.removeItem('token');
-          setToken(null);
+          const res = await api.get('/auth/me');
+          setCurrentUser(res.data.user);
+        } catch {
+          applyToken(null);
           setCurrentUser(null);
         }
       }
       setLoading(false);
     };
+    boot();
+  }, []); // run once on mount only
 
-    fetchCurrentUser();
-  }, [token]);
+  // ── Auth actions ─────────────────────────────────────────────────────────────
 
   const login = async (email, password) => {
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      const { token, user } = response.data;
-      
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setToken(token);
-      setCurrentUser(user);
-      return user;
-    } catch (error) {
-      throw error;
-    }
+    const res = await api.post('/auth/login', { email, password });
+    const { token: tkn, user } = res.data;
+    applyToken(tkn);
+    setCurrentUser(user);
+    return user;
   };
 
   const register = async (name, email, password) => {
-    try {
-      const response = await api.post('/auth/register', { name, email, password });
-      const { token, user } = response.data;
-      
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setToken(token);
-      setCurrentUser(user);
-      return user;
-    } catch (error) {
-      throw error;
-    }
+    const res = await api.post('/auth/register', { name, email, password });
+    const { token: tkn, user } = res.data;
+    applyToken(tkn);
+    setCurrentUser(user);
+    return user;
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
+    applyToken(null);
     setCurrentUser(null);
-    delete api.defaults.headers.common['Authorization'];
+  };
+
+  /**
+   * Call this after an operation that changed the user's role/orgId on the server
+   * (org creation, joining an org, etc.) and the server returned a new token.
+   */
+  const applyNewToken = (tkn, user) => {
+    applyToken(tkn);
+    if (user) setCurrentUser(user);
   };
 
   const updateProfile = async (userId, userData) => {
-    try {
-      const response = await api.put(`/users/${userId}`, userData);
-      setCurrentUser(prev => ({ ...prev, ...response.data.user }));
-      return response.data.user;
-    } catch (error) {
-      throw error;
-    }
+    const res = await api.put(`/users/${userId}`, userData);
+    setCurrentUser(prev => ({ ...prev, ...res.data.user }));
+    return res.data.user;
   };
 
   const changePassword = async (userId, passwordData) => {
-    try {
-      await api.put(`/users/${userId}/password`, passwordData);
-      return true;
-    } catch (error) {
-      throw error;
-    }
+    await api.put(`/users/${userId}/password`, passwordData);
+    return true;
   };
+
+  // ── Computed ─────────────────────────────────────────────────────────────────
+
+  const isAdmin    = currentUser?.role === 'admin';
+  const isOrgAdmin = currentUser?.role === 'org_admin' || currentUser?.role === 'admin';
 
   const value = {
     currentUser,
@@ -93,9 +106,12 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    refreshUser,
+    applyNewToken,
     updateProfile,
     changePassword,
-    isAdmin: currentUser?.role === 'admin'
+    isAdmin,
+    isOrgAdmin,
   };
 
   return (

@@ -20,9 +20,15 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
+    enum: ['user', 'admin', 'org_admin', 'teacher'],
     default: 'user'
   },
+  // Organization membership (ObjectId reference)
+  orgId:       { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', default: null },
+  batchIds:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }],
+
+  profilePicture: { type: String, default: '' },
+  lastLoginAt:    { type: Date, default: null }
 }, { timestamps: true });
 
 // Hash password before saving

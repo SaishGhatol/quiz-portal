@@ -11,8 +11,10 @@ router.get('/dashboard/stats', adminController.getDashboardStats);
 
 // Quiz management routes
 router.get('/quizzes', adminController.getAllQuizzes);
-router.post('/quizzes/create',authenticateJWT, adminController.createQuiz);  
+router.post('/quizzes/create', adminController.createQuiz);
 router.get('/quizzes/recent', adminController.getRecentQuizzes);
+router.post('/quizzes/:id/duplicate', adminController.duplicateQuiz);
+router.put('/quizzes/:id/questions/order', adminController.updateQuestionOrder);
 
 router.get('/quizzes/:id', adminController.getQuizById);
 router.get("/quizzes/attempts" , adminController.getAllAttempts)

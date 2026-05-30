@@ -64,13 +64,6 @@ exports.getAllQuizzes = async (req, res, next) => {
 }
 
     
-    // Debug logging (remove in production)
-    console.log('Query filters:', {
-      search,
-      category,
-      difficulty,
-      finalQuery: query
-    });
 
     // Set sort order
     const sort = {};
@@ -87,11 +80,6 @@ exports.getAllQuizzes = async (req, res, next) => {
     // Get total count for pagination
     const total = await Quiz.countDocuments(query);
 
-    // Debug logging (remove in production)
-    console.log('Results:', {
-      totalFound: total,
-      returnedCount: quizzes.length
-    });
 
     // Format response to match what frontend expects
     res.status(200).json({
@@ -123,18 +111,31 @@ exports.getQuizById = async (req, res) => {
       return res.status(404).json({ message: 'Quiz not found' });
     }
 
-    // Fetch all questions with complete details for all users
+    // Enforce scheduling window for non-admins
+    if (req.userRole !== 'admin') {
+      const now = new Date();
+      if (quiz.startDate && now < new Date(quiz.startDate)) {
+        return res.status(403).json({ message: 'This quiz is not available yet.' });
+      }
+      if (quiz.endDate && now > new Date(quiz.endDate)) {
+        return res.status(403).json({ message: 'This quiz has expired.' });
+      }
+    }
+
     const questions = await Question.find({ quizId: quiz._id });
 
-    // Return complete question and option details for all users
+    // Strip isCorrect from options so users cannot see answers before submitting
     res.json({
       quiz,
       questions: questions.map(q => ({
-        ...q._doc,
+        _id: q._id,
+        text: q.text,
+        type: q.type,
+        points: q.points,
+        explanation: q.explanation,
         options: q.options.map(opt => ({
           _id: opt._id,
-          text: opt.text,
-          isCorrect: opt.isCorrect // Include isCorrect for all users
+          text: opt.text
         }))
       }))
     });
@@ -147,28 +148,26 @@ exports.getQuizById = async (req, res) => {
 // Update quiz (admin only)
 exports.updateQuiz = async (req, res) => {
   try {
-    const { title, description, category, difficulty, timeLimit, passScore, isActive } = req.body;
-    
+    const { title, description, category, difficulty, timeLimit, passScore, isPublished, startDate, endDate, tags } = req.body;
+
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz not found' });
     }
-    
-    // Update quiz fields
-    quiz.title = title || quiz.title;
-    quiz.description = description || quiz.description;
-    quiz.category = category || quiz.category;
-    quiz.difficulty = difficulty || quiz.difficulty;
-    quiz.timeLimit = timeLimit || quiz.timeLimit;
-    quiz.passScore = passScore || quiz.passScore;
-    
-    // Only set isActive if it's provided
-    if (typeof isActive !== 'undefined') {
-      quiz.isActive = isActive;
-    }
-    
+
+    if (title) quiz.title = title;
+    if (description) quiz.description = description;
+    if (category) quiz.category = category;
+    if (difficulty) quiz.difficulty = difficulty;
+    if (timeLimit != null) quiz.timeLimit = timeLimit;
+    if (passScore != null) quiz.passScore = passScore;
+    if (typeof isPublished !== 'undefined') quiz.isPublished = isPublished;
+    if (startDate !== undefined) quiz.startDate = startDate || null;
+    if (endDate !== undefined) quiz.endDate = endDate || null;
+    if (Array.isArray(tags)) quiz.tags = tags;
+
     const updatedQuiz = await quiz.save();
-    
+
     res.json({
       message: 'Quiz updated successfully',
       quiz: updatedQuiz
@@ -429,32 +428,15 @@ exports.getQuizAttemptById = async (req, res) => {
 // Get all attempts for a user
 exports.getUserAttempts = async (req, res) => {
   try {
-    // Option 1: Rename the populated field to match frontend expectations
-    const attempts = await Attempt.find({ user: req.userId }) 
-      .populate('quizId', 'title category difficulty')  // Change 'quiz' to 'quizId' if that's your schema field
-      .select('-answers')
-      .sort({ createdAt: -1 });
-    
-    res.json({ attempts });
-
-    // Option 2 (Alternative): Keep the backend as is but transform data
-    /*
-    const attempts = await Attempt.find({ user: req.userId }) 
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    const attempts = await Attempt.find({ user: req.userId })
       .populate('quiz', 'title category difficulty')
       .select('-answers')
       .sort({ createdAt: -1 });
-    
-    // Transform data to match frontend expectations
-    const transformedAttempts = attempts.map(attempt => {
-      const attemptObj = attempt.toObject();
-      // Rename quiz to quizId for frontend compatibility
-      attemptObj.quizId = attemptObj.quiz;
-      delete attemptObj.quiz;
-      return attemptObj;
-    });
-    
-    res.json({ attempts: transformedAttempts });
-    */
+
+    res.json({ attempts });
   } catch (error) {
     console.error('Get user attempts error:', error);
     res.status(500).json({ message: 'Server error fetching attempts' });
@@ -468,10 +450,9 @@ exports.getQuizStatistics = async (req, res) => {
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    const quizId = await Quiz.findById(req.params.id);
-    
-    // Check if quiz exists
-    if (!quizId) {
+    const quiz = await Quiz.findById(req.params.id);
+
+    if (!quiz) {
       return res.status(404).json({ message: "Quiz not found" });
     }
 
@@ -574,6 +555,107 @@ exports.getRecentAttemptsByQuizId = async (req, res) => {
     res.json({ attempts: formattedAttempts });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching attempts', error: err.message });
+  }
+};
+
+// GET /api/leaderboard  — top scorers across all quizzes (best attempt per user per quiz)
+exports.getLeaderboard = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const quizId = req.query.quizId || null;
+
+    const matchStage = { completedAt: { $ne: null }, maxScore: { $gt: 0 } };
+    if (quizId && mongoose.Types.ObjectId.isValid(quizId)) {
+      matchStage.quiz = new mongoose.Types.ObjectId(quizId);
+    }
+
+    const leaderboard = await Attempt.aggregate([
+      { $match: matchStage },
+      {
+        $addFields: {
+          percentageScore: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] },
+          timeTakenSec: {
+            $cond: {
+              if: { $and: ['$completedAt', '$startedAt'] },
+              then: { $divide: [{ $subtract: ['$completedAt', '$startedAt'] }, 1000] },
+              else: null
+            }
+          }
+        }
+      },
+      { $sort: { percentageScore: -1, timeTakenSec: 1 } },
+      // Keep best attempt per user (per quiz if quizId given, else globally)
+      {
+        $group: {
+          _id: quizId ? { user: '$user', quiz: '$quiz' } : '$user',
+          score: { $first: '$percentageScore' },
+          timeTaken: { $first: '$timeTakenSec' },
+          completedAt: { $first: '$completedAt' },
+          quiz: { $first: '$quiz' },
+          attemptId: { $first: '$_id' }
+        }
+      },
+      { $sort: { score: -1, timeTaken: 1 } },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'userInfo'
+        }
+      },
+      {
+        $lookup: {
+          from: 'quizzes',
+          localField: 'quiz',
+          foreignField: '_id',
+          as: 'quizInfo'
+        }
+      },
+      {
+        $project: {
+          score: { $round: ['$score', 1] },
+          timeTaken: 1,
+          completedAt: 1,
+          attemptId: 1,
+          user: { $arrayElemAt: ['$userInfo', 0] },
+          quiz: { $arrayElemAt: ['$quizInfo', 0] }
+        }
+      },
+      {
+        $project: {
+          score: 1,
+          timeTaken: 1,
+          completedAt: 1,
+          attemptId: 1,
+          'user._id': 1,
+          'user.name': 1,
+          'quiz._id': 1,
+          'quiz.title': 1,
+          'quiz.category': 1
+        }
+      }
+    ]);
+
+    res.json({ leaderboard });
+  } catch (err) {
+    console.error('Leaderboard error:', err);
+    res.status(500).json({ message: 'Error fetching leaderboard', error: err.message });
+  }
+};
+
+// GET /api/stats — public platform stats for Home page
+exports.getPlatformStats = async (req, res) => {
+  try {
+    const [totalQuizzes, totalUsers, totalAttempts] = await Promise.all([
+      Quiz.countDocuments(),
+      require('../models/user.model').countDocuments(),
+      Attempt.countDocuments({ completedAt: { $ne: null } })
+    ]);
+    res.json({ totalQuizzes, totalUsers, totalAttempts });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching stats' });
   }
 };
 

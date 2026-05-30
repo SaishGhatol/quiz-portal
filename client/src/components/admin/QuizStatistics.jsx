@@ -1,248 +1,235 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
-import { Bar, Doughnut } from 'react-chartjs-2';
-import { Loader, AlertTriangle, ArrowLeft, Download, BarChart2, HelpCircle, Users, CheckCircle, Percent, Clock, SearchX } from 'lucide-react';
+import { Loader, AlertTriangle, ArrowLeft, Users, CheckCircle, BarChart2, Clock, Trophy, Download } from 'lucide-react';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
-
-const useQuizData = (quizId) => {
-  const [state, setState] = useState({ data: null, loading: true, error: null });
-
-  useEffect(() => {
-    if (!quizId) return;
-    const fetchQuizData = async () => {
-      try {
-        setState({ data: null, loading: true, error: null });
-        const [quizRes, statsRes, attemptsRes] = await Promise.all([
-          api.get(`/quizzes/${quizId}`),
-          api.get(`/quizzes/${quizId}/statistics`),
-          api.get(`/quizzes/${quizId}/attempts?limit=10`)
-        ]);
-        
-        setState({
-          data: {
-            quiz: quizRes.data.quiz,
-            statistics: statsRes.data.statistics,
-            attempts: attemptsRes.data.attempts || []
-          },
-          loading: false,
-          error: null
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error.response?.data || error.message);
-        setState({ data: null, loading: false, error: 'Failed to load quiz statistics.' });
-      }
-    };
-    fetchQuizData();
-  }, [quizId]);
-
-  return state;
+/* ── SVG bar chart ───────────────────────────────────────────────────────── */
+const BarChart = ({ data, color = '#4f46e5', height = 160 }) => {
+  if (!data || data.length === 0) return <p className="text-center text-sm text-gray-400 py-8">No data</p>;
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const barW = 100 / data.length;
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg viewBox={`0 0 ${Math.max(data.length * 40, 300)} ${height + 32}`} className="w-full" preserveAspectRatio="xMidYMax meet">
+        {data.map((d, i) => {
+          const bh = (d.value / maxVal) * height;
+          const x  = i * (100 / data.length) + barW * 0.15;
+          const w  = barW * 0.7;
+          return (
+            <g key={i}>
+              <rect x={`${x}%`} y={height - bh} width={`${w}%`} height={bh}
+                fill={color} opacity="0.85" rx="2" />
+              <text x={`${x + w / 2}%`} y={height + 16} textAnchor="middle"
+                fontSize="7" fill="currentColor" className="text-gray-500 dark:text-gray-400">
+                {d.label?.length > 12 ? d.label.slice(0, 10) + '…' : d.label}
+              </text>
+              <text x={`${x + w / 2}%`} y={height - bh - 4} textAnchor="middle"
+                fontSize="7" fill={color} fontWeight="600">
+                {Math.round(d.value)}%
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
 };
 
+/* ── Component ───────────────────────────────────────────────────────────── */
 const QuizStatistics = () => {
   const { id } = useParams();
-  const { data, loading, error } = useQuizData(id);
-  const [activeTab, setActiveTab] = useState('summary');
-  
-  const { quiz, statistics, attempts } = data || {};
+  const [quiz,  setQuiz]  = useState(null);
+  const [stats, setStats] = useState(null);
+  const [recent,setRecent]= useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+  const [tab,     setTab]     = useState('summary');
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#18181b', // zinc-900
-        titleColor: '#f4f4f5', // zinc-100
-        bodyColor: '#a1a1aa', // zinc-400
-        borderColor: '#3f3f46', // zinc-700
-        borderWidth: 1,
-        padding: 10,
-        cornerRadius: 8
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-        ticks: { color: '#a1a1aa' }
-      },
-      x: {
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: '#a1a1aa' }
-      }
-    }
-  };
-
-  const chartData = useMemo(() => {
-    if (!statistics?.questionStats) return { bar: null, doughnut: null };
-    
-    const barData = {
-      labels: statistics.questionStats.map((_, idx) => `Q${idx + 1}`),
-      datasets: [{
-        label: 'Success Rate',
-        data: statistics.questionStats.map(q => q.successRate),
-        backgroundColor: statistics.questionStats.map(q => 
-          q.successRate >= 70 ? 'rgba(74, 222, 128, 0.5)' : 
-          q.successRate >= 40 ? 'rgba(250, 204, 21, 0.5)' : 
-          'rgba(248, 113, 113, 0.5)'
-        ),
-        borderColor: statistics.questionStats.map(q => 
-          q.successRate >= 70 ? '#4ade80' : 
-          q.successRate >= 40 ? '#facc15' : 
-          '#f87171'
-        ),
-        borderWidth: 1,
-        borderRadius: 4,
-      }]
-    };
-
-    const totalQuestions = statistics.questionStats.length;
-    const difficultyCounts = {
-      easy: statistics.questionStats.filter(q => q.successRate >= 70).length,
-      medium: statistics.questionStats.filter(q => q.successRate >= 40 && q.successRate < 70).length,
-      hard: statistics.questionStats.filter(q => q.successRate < 40).length
-    };
-
-    const doughnutData = {
-      labels: ['Easy', 'Medium', 'Hard'],
-      datasets: [{
-        data: [difficultyCounts.easy, difficultyCounts.medium, difficultyCounts.hard],
-        backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
-        borderColor: '#18181b',
-        borderWidth: 3,
-      }]
-    };
-
-    return { bar: barData, doughnut: doughnutData, difficultyCounts };
-  }, [statistics]);
+  useEffect(() => {
+    Promise.all([
+      api.get(`/quizzes/${id}`),
+      api.get(`/quizzes/${id}/statistics`),
+      api.get(`/quizzes/${id}/attempts?limit=10`),
+    ]).then(([qr, sr, ar]) => {
+      setQuiz(qr.data.quiz);
+      setStats(sr.data.statistics);
+      setRecent(ar.data.attempts || []);
+    }).catch(() => setError('Failed to load statistics.'))
+    .finally(() => setLoading(false));
+  }, [id]);
 
   const downloadCSV = () => {
-    if (!statistics || !quiz) return;
-    let csv = "Question,Correct Count,Total Attempts,Success Rate (%)\n";
-    statistics.questionStats.forEach((q, i) => {
-      csv += `"${i+1}. ${q.text.replace(/"/g, '""')}",${q.correctCount},${q.totalAttempts},${q.successRate.toFixed(2)}\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${quiz.title.replace(/\s+/g, '_')}_stats.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-  
-  const formatTime = (ms) => {
-    if (isNaN(ms) || ms < 0) return 'N/A';
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}m ${seconds}s`;
+    if (!stats?.questionStats) return;
+    const rows = [
+      ['Question', 'Correct', 'Total Attempts', 'Success Rate (%)'],
+      ...stats.questionStats.map(q => [
+        `"${q.text?.replace(/"/g, '""')}"`,
+        q.correctCount,
+        q.totalAttempts,
+        q.successRate?.toFixed(1),
+      ]),
+    ];
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `${quiz?.title || 'quiz'}-stats.csv`;
+    a.click();
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-gray-500">
-        <Loader className="animate-spin h-8 w-8 mb-4" />
-        <p className="font-semibold text-lg">Loading Statistics...</p>
+  if (loading) return <div className="flex justify-center items-center min-h-[50vh] bg-white dark:bg-gray-950"><Loader className="animate-spin h-6 w-6 text-indigo-500" /></div>;
+  if (error)   return (
+    <div className="min-h-[50vh] bg-white dark:bg-gray-950 flex items-center justify-center px-4">
+      <div className="text-center">
+        <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-3" />
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{error}</p>
+        <Link to="/admin/quizzes" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">← Back</Link>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center">
-        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
-          <AlertTriangle className="h-12 w-12 text-red-500/50 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">Error Loading Data</h3>
-          <p className="text-gray-500 mb-6">{error}</p>
-          <Link to="/admin/quizzes" className="inline-flex items-center gap-2 px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors">
-            <ArrowLeft size={16} /> Back to Quizzes
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const kpis = [
+    { label: 'Total attempts',   value: stats?.totalAttempts ?? 0,                      icon: Users },
+    { label: 'Avg score',        value: `${Math.round(stats?.averageScore ?? 0)}%`,     icon: BarChart2 },
+    { label: 'Pass rate',        value: `${Math.round(stats?.passRate ?? 0)}%`,          icon: CheckCircle },
+    { label: 'Unique students',  value: stats?.uniqueUsers ?? 0,                         icon: Trophy },
+  ];
+
+  const questionBars = (stats?.questionStats || []).map(q => ({
+    label: q.text?.slice(0, 20) || 'Q',
+    value: q.successRate ?? 0,
+  }));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <Link to="/admin/quizzes" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={16} /> All Quizzes
-          </Link>
-          <h1 className="text-4xl font-bold text-white mt-1">{quiz.title}</h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+
+        {/* Header */}
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
+          <div>
+            <Link to="/admin/quizzes" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-1 mb-2">
+              <ArrowLeft className="h-3.5 w-3.5" /> Quizzes
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{quiz?.title}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 capitalize">{quiz?.category} · {quiz?.difficulty}</p>
+          </div>
+          <button onClick={downloadCSV}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
         </div>
-        <button onClick={downloadCSV} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm font-semibold text-gray-300 hover:text-white hover:bg-gray-800 transition-colors">
-          <Download size={16} /> Export Report
-        </button>
-      </header>
 
-      {statistics.totalAttempts === 0 ? (
-        <div className="text-center py-20 bg-gray-950 border border-gray-800 rounded-2xl">
-          <SearchX className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">No Data Yet</h3>
-          <p className="text-gray-500">There are no attempts for this quiz. Statistics will appear here once users participate.</p>
+        {/* KPIs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
+          {kpis.map((k, i) => (
+            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
+              <k.icon className="h-5 w-5 text-indigo-500 mb-3" />
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{k.value}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{k.label}</p>
+            </div>
+          ))}
         </div>
-      ) : (
-        <>
-          {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-gray-950 border border-gray-800 rounded-xl p-4"><p className="text-sm text-gray-400 mb-1">Total Attempts</p><p className="text-3xl font-bold text-white">{statistics.totalAttempts}</p></div>
-            <div className="bg-gray-950 border border-gray-800 rounded-xl p-4"><p className="text-sm text-gray-400 mb-1">Unique Takers</p><p className="text-3xl font-bold text-white">{statistics.uniqueUsers}</p></div>
-            <div className="bg-gray-950 border border-gray-800 rounded-xl p-4"><p className="text-sm text-gray-400 mb-1">Average Score</p><p className="text-3xl font-bold text-white">{statistics.averageScore.toFixed(1)}%</p></div>
-            <div className="bg-gray-950 border border-gray-800 rounded-xl p-4"><p className="text-sm text-gray-400 mb-1">Pass Rate</p><p className="text-3xl font-bold text-white">{statistics.passRate.toFixed(1)}%</p></div>
-          </div>
-          
-          {/* Tabs */}
-          <div className="border-b border-gray-800 mb-6">
-            <nav className="flex space-x-6">
-              <button onClick={() => setActiveTab('summary')} className={`py-3 px-1 text-sm font-semibold transition-colors ${activeTab === 'summary' ? 'text-white border-b-2 border-white' : 'text-gray-400 hover:text-white'}`}>Summary</button>
-              <button onClick={() => setActiveTab('questions')} className={`py-3 px-1 text-sm font-semibold transition-colors ${activeTab === 'questions' ? 'text-white border-b-2 border-white' : 'text-gray-400 hover:text-white'}`}>Question Analysis</button>
-              <button onClick={() => setActiveTab('attempts')} className={`py-3 px-1 text-sm font-semibold transition-colors ${activeTab === 'attempts' ? 'text-white border-b-2 border-white' : 'text-gray-400 hover:text-white'}`}>Recent Attempts</button>
-            </nav>
-          </div>
 
-          {/* Tab Content */}
-          <div className={`${activeTab === 'summary' ? 'block' : 'hidden'}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1 bg-gray-950 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-semibold text-white mb-4">Difficulty Breakdown</h3>
-                <div className="h-64 mx-auto max-w-[250px]"><Doughnut data={chartData.doughnut} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#a1a1aa' } }, tooltip: { ...chartOptions.plugins.tooltip } } }} /></div>
-                <div className="mt-4 text-center text-sm text-gray-400">
-                  <p>Easy: {chartData.difficultyCounts.easy} | Medium: {chartData.difficultyCounts.medium} | Hard: {chartData.difficultyCounts.hard}</p>
-                </div>
-              </div>
-              <div className="lg:col-span-2 bg-gray-950 border border-gray-800 rounded-2xl p-6">
-                <h3 className="font-semibold text-white mb-4">Question Success Rates</h3>
-                <div className="h-80"><Bar data={chartData.bar} options={chartOptions} /></div>
-              </div>
-            </div>
-          </div>
-          
-          <div className={`${activeTab === 'questions' ? 'block' : 'hidden'}`}>
-            <div className="bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden">
-                <table className="min-w-full"><thead className="bg-gray-900"><tr className="border-b border-gray-800"><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">#</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Question</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Success Rate</th></tr></thead>
-                <tbody className="divide-y divide-gray-800">{statistics.questionStats.map((q, i) => (<tr key={q.questionId} className="hover:bg-gray-900"><td className="px-5 py-4 text-sm text-gray-400">{i+1}</td><td className="px-5 py-4 text-sm text-white max-w-md truncate">{q.text}</td><td className="px-5 py-4 text-sm text-white">{q.successRate.toFixed(1)}%</td></tr>))}</tbody></table>
-            </div>
-          </div>
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800/60 p-1 rounded-lg w-fit">
+          {[['summary', 'Summary'], ['questions', 'Questions'], ['attempts', 'Recent Attempts']].map(([val, label]) => (
+            <button key={val} onClick={() => setTab(val)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors
+                ${tab === val
+                  ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
 
-          <div className={`${activeTab === 'attempts' ? 'block' : 'hidden'}`}>
-             <div className="bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden">
-                <table className="min-w-full"><thead className="bg-gray-900"><tr className="border-b border-gray-800"><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">User</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Score</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Time Taken</th><th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase">Date</th><th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase"></th></tr></thead>
-                <tbody className="divide-y divide-gray-800">{attempts.map(att => (<tr key={att._id} className="hover:bg-gray-900"><td className="px-5 py-4 text-sm text-white font-medium">{att.user?.name || 'Anonymous'}</td><td className="px-5 py-4 text-sm text-white">{att.score}/{att.maxScore} ({Math.round(att.score/att.maxScore*100)}%)</td><td className="px-5 py-4 text-sm text-white">{formatTime(new Date(att.completedAt) - new Date(att.startedAt))}</td><td className="px-5 py-4 text-sm text-gray-400">{new Date(att.completedAt).toLocaleDateString()}</td><td className="px-5 py-4 text-right"><Link to={`/attempts/${att._id}`} className="text-sm font-semibold text-gray-300 hover:text-white">Details</Link></td></tr>))}</tbody></table>
-             </div>
+        {/* Summary tab */}
+        {tab === 'summary' && (
+          <div className="space-y-5">
+            {questionBars.length > 0 ? (
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+                <h2 className="font-bold text-gray-900 dark:text-white mb-4">Question success rates</h2>
+                <BarChart data={questionBars} color="#4f46e5" />
+                <p className="text-xs text-gray-400 mt-2 text-center">% of students who answered each question correctly</p>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center text-gray-400 text-sm">
+                No attempt data yet.
+              </div>
+            )}
           </div>
-        </>
-      )}
+        )}
+
+        {/* Questions tab */}
+        {tab === 'questions' && (
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+              <span className="col-span-6">Question</span>
+              <span className="col-span-2 text-right">Correct</span>
+              <span className="col-span-2 text-right">Attempts</span>
+              <span className="col-span-2 text-right">Rate</span>
+            </div>
+            {(stats?.questionStats || []).length === 0 ? (
+              <div className="py-12 text-center text-sm text-gray-400">No question data.</div>
+            ) : (
+              <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {stats.questionStats.map((q, i) => (
+                  <div key={i} className="grid grid-cols-12 items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <p className="col-span-6 text-sm text-gray-900 dark:text-white truncate pr-4">{i + 1}. {q.text}</p>
+                    <span className="col-span-2 text-right text-sm text-gray-600 dark:text-gray-300">{q.correctCount ?? 0}</span>
+                    <span className="col-span-2 text-right text-sm text-gray-600 dark:text-gray-300">{q.totalAttempts ?? 0}</span>
+                    <div className="col-span-2 flex items-center justify-end gap-2">
+                      <div className="w-12 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${Math.min(q.successRate ?? 0, 100)}%` }} />
+                      </div>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8 text-right">
+                        {Math.round(q.successRate ?? 0)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recent attempts tab */}
+        {tab === 'attempts' && (
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+              <span className="col-span-4">Student</span>
+              <span className="col-span-3 text-right">Score</span>
+              <span className="col-span-3 text-right">Time</span>
+              <span className="col-span-2 text-right">Date</span>
+            </div>
+            {recent.length === 0 ? (
+              <div className="py-12 text-center text-sm text-gray-400">No attempts yet.</div>
+            ) : (
+              <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                {recent.map((a, i) => (
+                  <div key={i} className="grid grid-cols-12 items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <div className="col-span-4">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{a.user?.name || 'Anonymous'}</p>
+                      <p className="text-xs text-gray-400">{a.user?.email}</p>
+                    </div>
+                    <span className={`col-span-3 text-right text-sm font-semibold
+                      ${a.score >= 70 ? 'text-green-600 dark:text-green-400' : a.score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {a.score}%
+                    </span>
+                    <span className="col-span-3 text-right text-sm text-gray-500 dark:text-gray-400">
+                      {a.timeTaken != null ? `${Math.floor(a.timeTaken / 60)}m ${a.timeTaken % 60}s` : '—'}
+                    </span>
+                    <span className="col-span-2 text-right text-xs text-gray-400">
+                      {a.createdAt ? new Date(a.createdAt).toLocaleDateString() : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
 export default QuizStatistics;
-

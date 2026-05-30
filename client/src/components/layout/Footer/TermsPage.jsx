@@ -42,25 +42,25 @@ const TermsPage = () => {
       `}</style>
       <div className="max-w-4xl mx-auto px-4 py-8 animate-fade-in">
         <header className="mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-900 dark:text-white transition-colors">
             <ArrowLeft size={16} />
             Back to Home
           </Link>
-          <h1 className="text-4xl font-bold text-white mt-2 flex items-center gap-3">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mt-2 flex items-center gap-3">
             <FileText size={32} />
             Terms of Service
           </h1>
-          <p className="text-gray-500 mt-1">Last Updated: September 3, 2025</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Last Updated: September 3, 2025</p>
         </header>
 
-        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6 md:p-8">
+        <div className="bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 md:p-8">
           <div className="space-y-8">
-            <p className="text-lg text-gray-300">
+            <p className="text-lg text-gray-700 dark:text-gray-300">
               Please read these Terms of Service carefully before using our platform. Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms.
             </p>
             {termsSections.map((section, index) => (
               <div key={index}>
-                <h2 className="text-2xl font-semibold text-white border-b border-gray-800 pb-3 mb-4">
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-800 pb-3 mb-4">
                   {section.title}
                 </h2>
                 <p className="text-gray-400 leading-relaxed">

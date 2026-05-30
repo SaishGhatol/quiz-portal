@@ -30,11 +30,7 @@ exports.getDashboardStats = async (req, res, next) => {
 };
 exports.createQuiz = async (req, res) => {
   try {
-    // Log the incoming request data for debugging
-    console.log('Create quiz request body:', req.body);
-    console.log('User from request:', req.userId);
-    
-    const { title, description, category, difficulty, timeLimit, passScore, isPublished } = req.body;
+    const { title, description, category, difficulty, timeLimit, passScore, isPublished, startDate, endDate, tags } = req.body;
     
     
     const quiz = new Quiz({
@@ -44,8 +40,11 @@ exports.createQuiz = async (req, res) => {
       difficulty,
       timeLimit,
       passScore,
-      isPublished: isPublished || false, // Adding isPublished field with default
-      createdBy: req.userId  // Make sure we're using _id explicitly
+      isPublished: isPublished || false,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      tags: tags || [],
+      createdBy: req.userId
     });
     
     const savedQuiz = await quiz.save();
@@ -264,7 +263,7 @@ exports.deleteUser = async (req, res, next) => {
     }
     
     // Check for admin trying to delete themselves
-    if (user.role === 'admin' && req.user && req.user.id === userId) {
+    if (user.role === 'admin' && req.userId === userId) {
       return res.status(403).json({ message: 'Admins cannot delete their own accounts' });
     }
     
@@ -569,19 +568,72 @@ exports.getAllQuizzes = async (req, res, next) => {
 };
 exports.getRecentQuizzes = async (req, res, next) => {
   try {
-    // Get the 10 most recent quizzes
     const quizzes = await Quiz.find()
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(50)
       .exec();
-
-    res.status(200).json({
-      quizzes,
-      success: true
-    });
+    res.status(200).json({ quizzes, success: true });
   } catch (error) {
     console.error('Error fetching recent quizzes:', error);
+    next(error);
+  }
+};
+
+// Duplicate a quiz (and all its questions)
+exports.duplicateQuiz = async (req, res, next) => {
+  try {
+    const original = await Quiz.findById(req.params.id);
+    if (!original) return res.status(404).json({ message: 'Quiz not found' });
+
+    const copy = await Quiz.create({
+      title:        `${original.title} (Copy)`,
+      description:  original.description,
+      category:     original.category,
+      difficulty:   original.difficulty,
+      timeLimit:    original.timeLimit,
+      passScore:    original.passScore,
+      tags:         original.tags,
+      isPublished:  false,          // copies start as draft
+      createdBy:    req.userId,
+    });
+
+    // Copy all questions
+    const Question = require('../models/question.model');
+    const origQuestions = await Question.find({ quizId: original._id });
+    if (origQuestions.length) {
+      const cloned = origQuestions.map(q => ({
+        quizId:      copy._id,
+        text:        q.text,
+        type:        q.type,
+        options:     q.options,
+        points:      q.points,
+        explanation: q.explanation,
+      }));
+      await Question.insertMany(cloned);
+      await Quiz.findByIdAndUpdate(copy._id, { totalQuestions: cloned.length });
+    }
+
+    res.status(201).json({ message: 'Quiz duplicated', quiz: copy });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Update question order
+exports.updateQuestionOrder = async (req, res, next) => {
+  try {
+    const { questionIds } = req.body;
+    const Question = require('../models/question.model');
+    // Assign order by updating createdAt timestamps to maintain sequence
+    const now = Date.now();
+    await Promise.all(
+      questionIds.map((qid, idx) =>
+        Question.findByIdAndUpdate(qid, { createdAt: new Date(now + idx * 1000) })
+      )
+    );
+    res.json({ message: 'Order updated' });
+  } catch (error) {
     next(error);
   }
 };

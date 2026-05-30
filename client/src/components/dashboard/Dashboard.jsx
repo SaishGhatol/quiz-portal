@@ -1,191 +1,201 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { Loader, AlertTriangle, ArrowRight, User, Shapes, Sparkles, History } from 'lucide-react';
+import AuthContext from '../../contexts/AuthContext';
+import { Loader, ArrowRight, Trophy, BookOpen, TrendingUp, Clock, CheckCircle, AlertCircle, Calendar, Layers, Bell } from 'lucide-react';
 
-// A reusable, interactive card with the mouse-tracking aurora effect
-const Card = ({ children, className = '' }) => {
-  const cardRef = useRef(null);
-  const handleMouseMove = (e) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    cardRef.current.style.setProperty('--mouse-x', `${x}px`);
-    cardRef.current.style.setProperty('--mouse-y', `${y}px`);
-  };
-
+/* Tiny SVG sparkline — no extra dependency */
+const MiniSparkline = ({ values }) => {
+  if (!values || values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${40 - (v / max) * 40}`);
   return (
-    <div
-      ref={cardRef}
-      onMouseMove={handleMouseMove}
-      className={`group relative bg-gray-950 border border-gray-800 rounded-2xl p-6 overflow-hidden transform transition-transform duration-300 ease-out hover:-translate-y-1 ${className}`}
-    >
-      <div
-        className="absolute -inset-px rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 
-                   before:absolute before:inset-0 before:rounded-xl 
-                   before:bg-[radial-gradient(400px_circle_at_var(--mouse-x)_var(--mouse-y),rgba(148,163,184,0.1),transparent_80%)] 
-                   pointer-events-none"
-        aria-hidden="true"
-      />
-      <div className="relative z-10 h-full flex flex-col">{children}</div>
-    </div>
+    <svg viewBox="0 0 100 40" className="w-20 h-8" preserveAspectRatio="none">
+      <polyline points={pts.join(' ')} fill="none" stroke="#4f46e5" strokeWidth="2.5"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 };
 
-// Function to get a time-based greeting
-const getGreeting = () => {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-};
-
 const Dashboard = () => {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get('/users/dashboard');
-      setStats(response.data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      setError('Failed to load dashboard data. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { currentUser } = useContext(AuthContext);
+  const [attempts,      setAttempts]      = useState([]);
+  const [totalQuizzes,  setTotalQuizzes]  = useState(0);
+  const [assignments,   setAssignments]   = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading,       setLoading]       = useState(true);
 
   useEffect(() => {
-    fetchDashboardData();
+    Promise.all([
+      api.get('/quizzes/my-attempts').catch(() => ({ data: { attempts: [] } })),
+      api.get('/quizzes/stats').catch(() => ({ data: { totalQuizzes: 0 } })),
+      api.get('/org/my-assignments').catch(() => ({ data: { assignments: [] } })),
+      api.get('/org/announcements').catch(() => ({ data: { announcements: [] } })),
+    ]).then(([a, s, asgn, ann]) => {
+      setAttempts(a.data.attempts || []);
+      setTotalQuizzes(s.data.totalQuizzes || 0);
+      // Only show active (not expired, not future)
+      setAssignments((asgn.data.assignments || []).filter(x => {
+        if (x.dueDate && new Date(x.dueDate) < new Date()) return false;
+        if (x.startDate && new Date(x.startDate) > new Date()) return false;
+        return true;
+      }));
+      setAnnouncements(ann.data.announcements || []);
+    }).finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-gray-500">
-        <Loader className="animate-spin h-8 w-8 mb-4" />
-        <p className="font-semibold text-lg">Loading Dashboard...</p>
-      </div>
-    );
-  }
+  const done = attempts.filter(a => a.completedAt);
+  const pct  = a => a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0;
+  const avg  = done.length ? Math.round(done.reduce((s, a) => s + pct(a), 0) / done.length) : 0;
+  const recentScores = done.slice(-8).map(pct);
 
-  if (error || !stats) { // Also check if stats is null
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center">
-        <div className="bg-gray-950 border border-gray-800 rounded-2xl p-8 max-w-lg w-full text-center">
-          <AlertTriangle className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">Something went wrong</h3>
-          <p className="text-gray-500 mb-6">{error || 'Could not retrieve dashboard statistics.'}</p>
-          <button
-            onClick={fetchDashboardData}
-            className="px-5 py-2 bg-white text-black rounded-lg hover:bg-gray-200 font-semibold transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const h = new Date().getHours();
+  const greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 
-  const completionPercentage = stats.totalQuizzes > 0 ? ((stats.totalAttempts / stats.totalQuizzes) * 100).toFixed(0) : 0;
-  const progressMessage = completionPercentage >= 100 ? "You've completed all quizzes! Amazing!" : completionPercentage >= 50 ? "Over halfway there! Keep it up!" : "Start your journey. Every quiz counts!";
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[50vh] bg-white dark:bg-gray-950">
+      <Loader className="animate-spin h-6 w-6 text-indigo-500" />
+    </div>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-7">
+
+        {/* Greeting */}
         <div>
-          {/* --- FIXED CODE --- */}
-          <h1 className="text-4xl font-bold text-white">{getGreeting()}, {stats?.user?.name?.split(' ')[0] || 'Explorer'}</h1>
-          <p className="text-gray-400 mt-1">Ready for your next challenge?</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{greeting}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">{currentUser?.name}</h1>
         </div>
-        <Link to="/quizzes" className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 hover:text-white hover:bg-gray-800 transition-colors">
-            <Sparkles size={16} />
-            Explore Quizzes
-        </Link>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-            <div className="flex flex-col md:flex-row items-center gap-6 md:gap-12">
-                <div className="relative h-24 w-24">
-                    <svg className="h-full w-full" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="45" strokeWidth="10" fill="none" className="stroke-gray-800/80"/>
-                        <circle 
-                            cx="50" cy="50" r="45" strokeWidth="10" fill="none"
-                            className="stroke-white transition-all duration-700 ease-out"
-                            strokeDasharray={`${(completionPercentage * 2.83)} 283`}
-                            strokeLinecap="round" transform="rotate(-90 50 50)"
-                        />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xl font-bold text-white">{completionPercentage}%</span>
-                    </div>
-                </div>
-                <div className="text-center md:text-left">
-                    <h3 className="text-xl font-semibold text-white mb-2">Your Quiz Progress</h3>
-                    <p className="text-gray-400 max-w-sm">{progressMessage}</p>
-                    <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
-                      <Link to="/quizzes" className="w-full sm:w-auto px-6 py-3 bg-white text-black rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors">
-                        Continue Learning
-                      </Link>
-                      <Link to="/my-attempts" className="w-full sm:w-auto text-sm text-gray-400 hover:text-white transition-colors">View All Attempts</Link>
-                    </div>
-                </div>
+        {/* Announcement banner */}
+        {announcements.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-5 py-4">
+            <div className="flex items-start gap-3">
+              <Bell className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  {announcements[0].isPinned ? '📌 ' : ''}{announcements[0].title}
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mt-0.5 line-clamp-2">{announcements[0].content}</p>
+              </div>
+              {announcements.length > 1 && (
+                <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0 self-center">+{announcements.length - 1}</span>
+              )}
             </div>
-        </Card>
+          </div>
+        )}
 
-        <Card className="lg:col-span-1">
-          <div className="flex items-center justify-between text-gray-400 gap-3">
-            <Shapes size={20} />
-            <h3 className="font-semibold text-sm">Quizzes Available</h3>
-          </div>
-          <p className="text-5xl font-bold text-white my-4">{stats.totalQuizzes}</p>
-          <div className="flex-grow"></div>
-          <Link to="/quizzes" className="text-sm font-semibold text-gray-300 hover:text-white flex items-center gap-1">
-            Browse All <ArrowRight size={14} />
-          </Link>
-        </Card>
-        
-        <div className="lg:col-span-3 bg-gray-950 border border-gray-800 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center text-gray-400 gap-3">
-              <History size={18} />
-              <h3 className="font-semibold text-white">Recent Activity</h3>
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: 'Quizzes done', value: done.length,        icon: Trophy },
+            { label: 'Avg score',   value: `${avg}%`,           icon: TrendingUp },
+            { label: 'Available',   value: totalQuizzes,        icon: BookOpen },
+            { label: 'Assigned',    value: assignments.length,  icon: Layers },
+          ].map((s, i) => (
+            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
+              <s.icon className="h-5 w-5 text-indigo-500 mb-3" />
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{s.value}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{s.label}</p>
             </div>
-            {stats.completedQuizzes?.length > 0 && (
-                 <Link to="/my-attempts" className="text-xs font-semibold text-gray-400 hover:text-white">View All</Link>
-            )}
+          ))}
+        </div>
+
+        {/* Score sparkline */}
+        {recentScores.length >= 2 && (
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-5 py-4 flex items-center gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Score trend</p>
+              <p className="text-xs text-gray-400 mt-0.5">Last {recentScores.length} quizzes</p>
+            </div>
+            <MiniSparkline values={recentScores} />
+            <Link to="/progress" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline shrink-0">
+              Full report →
+            </Link>
           </div>
-          {/* Defensive check for completedQuizzes */}
-          {stats.completedQuizzes && stats.completedQuizzes.length > 0 ? (
-            <div className="space-y-2">
-              {stats.completedQuizzes.slice(0, 5).map(quiz => (
-                <Link to={`/attempts/${quiz.attemptId}`} key={quiz.attemptId} className="block p-4 rounded-lg hover:bg-gray-900 transition-colors">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="flex-1">
-                      <p className="font-semibold text-white">{quiz.title}</p>
-                      <p className="text-xs text-gray-500 mt-1">Category: {quiz.category}</p>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm w-full sm:w-auto">
-                        <p className="font-medium text-white">{quiz.score}<span className="text-gray-500">/{quiz.totalQuestions}</span></p>
-                        <p className="text-gray-500 text-xs text-right flex-1 sm:flex-none">
-                          {new Date(quiz.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </p>
-                    </div>
+        )}
+
+        {/* Pending assignments */}
+        {assignments.length > 0 && (
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+              <h2 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Layers className="h-4 w-4 text-indigo-500" /> Assigned to you
+              </h2>
+              <Link to="/my-assignments" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">View all</Link>
+            </div>
+            <div className="divide-y divide-gray-50 dark:divide-gray-800">
+              {assignments.slice(0, 3).map((a, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-3.5">
+                  {a.batch?.color && <div className="w-1.5 h-10 rounded-full shrink-0" style={{ backgroundColor: a.batch.color }} />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.quiz?.title}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                      {a.batch?.name}
+                      {a.dueDate && <span className="flex items-center gap-0.5"><Calendar className="h-3 w-3" />Due {new Date(a.dueDate).toLocaleDateString()}</span>}
+                    </p>
                   </div>
-                </Link>
+                  <Link to={`/quiz/${a.quiz?._id}`}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors">
+                    Start <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* CTA */}
+        <div className="bg-indigo-600 rounded-xl px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-white">Ready for a challenge?</p>
+            <p className="text-sm text-indigo-100 mt-0.5">Browse all available quizzes.</p>
+          </div>
+          <Link to="/quizzes" className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-white text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-50 transition-colors">
+            Explore <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        {/* Recent activity */}
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+            <h2 className="font-bold text-gray-900 dark:text-white">Recent activity</h2>
+            <Link to="/my-attempts" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">View all</Link>
+          </div>
+          {done.length === 0 ? (
+            <div className="py-14 text-center">
+              <BookOpen className="h-8 w-8 text-gray-300 dark:text-gray-700 mx-auto mb-2" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">No quizzes completed yet.</p>
+              <Link to="/quizzes" className="mt-3 inline-block text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Start one now</Link>
+            </div>
           ) : (
-            <div className="text-center py-16">
-                <p className="text-gray-500">No recent activity to display.</p>
+            <div className="divide-y divide-gray-50 dark:divide-gray-800">
+              {done.slice(0, 5).map((a, i) => {
+                const score = pct(a);
+                return (
+                  <Link key={i} to={`/attempts/${a._id}`}
+                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
+                    {score >= 70
+                      ? <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
+                      : <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.quiz?.title || 'Unknown'}</p>
+                      <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                        <Clock className="h-3 w-3" /> {new Date(a.completedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className={`text-sm font-semibold ${score >= 70 ? 'text-green-600 dark:text-green-400' : score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {score}%
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-400 transition-colors" />
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
+
       </div>
     </div>
   );
