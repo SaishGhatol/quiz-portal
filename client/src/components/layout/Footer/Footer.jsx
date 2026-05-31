@@ -11,7 +11,7 @@ const Footer = () => (
         <div>
           <Link to="/" className="flex items-center gap-2 mb-3">
             <Logo size={24} />
-            <span className="font-bold text-gray-900 dark:text-white text-sm">Quiz Portal</span>
+            <span className="font-bold text-gray-900 dark:text-white text-sm">ExamVault</span>
           </Link>
           <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed max-w-xs">
             A quiz platform for students, educators, and training teams.
@@ -48,7 +48,7 @@ const Footer = () => (
       </div>
 
       <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400 dark:text-gray-500">
-        <span>© {new Date().getFullYear()} Quiz Portal. All rights reserved.</span>
+        <span>© {new Date().getFullYear()} ExamVault. All rights reserved.</span>
         <span>Built by <span className="text-gray-600 dark:text-gray-300 font-medium">Saish Ghatol</span></span>
       </div>
     </div>

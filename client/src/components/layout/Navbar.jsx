@@ -69,7 +69,7 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
             <Logo size={28} />
             <span className="font-bold text-gray-900 dark:text-white text-[15px] tracking-tight hidden sm:block">
-              Quiz Portal
+              ExamVault
             </span>
           </Link>
 

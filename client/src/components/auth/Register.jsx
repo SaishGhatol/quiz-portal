@@ -37,7 +37,7 @@ const Register = () => {
         <div className="text-center mb-8">
           <Logo size={40} className="mx-auto mb-4" />
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Create account</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Free forever — no credit card needed</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Join ExamVault — free forever, no credit card needed</p>
         </div>
 
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">

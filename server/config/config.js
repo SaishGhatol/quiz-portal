@@ -7,10 +7,10 @@ module.exports = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   
   // MongoDB
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz-portal',
+  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/examvault',
   
   // JWT
-  JWT_SECRET: process.env.JWT_SECRET || 'quiz-portal-secret',
+  JWT_SECRET: process.env.JWT_SECRET || 'examvault-secret',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '24h',
   
   // Client URL for CORS

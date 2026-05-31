@@ -6,7 +6,7 @@ const TermsPage = () => {
   const termsSections = [
     {
       title: "1. Acceptance of Terms",
-      content: "By accessing or using the Quiz Portal platform ('Service'), you agree to be bound by these Terms of Service. If you disagree with any part of the terms, then you may not access the Service."
+      content: "By accessing or using the ExamVault platform ('Service'), you agree to be bound by these Terms of Service. If you disagree with any part of the terms, then you may not access the Service."
     },
     {
       title: "2. User Accounts",
@@ -14,11 +14,11 @@ const TermsPage = () => {
     },
     {
       title: "3. Content and Conduct",
-      content: "You are responsible for all content you submit, post, or display on the Quiz Portal. You agree not to post content that is illegal, offensive, or infringing on intellectual property rights. We reserve the right to remove any content that violates these terms."
+      content: "You are responsible for all content you submit, post, or display on ExamVault. You agree not to post content that is illegal, offensive, or infringing on intellectual property rights. We reserve the right to remove any content that violates these terms."
     },
     {
       title: "4. Intellectual Property",
-      content: "The Service and its original content, features, and functionality are and will remain the exclusive property of the Quiz Portal and its licensors. Our trademarks may not be used in connection with any product or service without our prior written consent."
+      content: "The Service and its original content, features, and functionality are and will remain the exclusive property of ExamVault and its licensors. Our trademarks may not be used in connection with any product or service without our prior written consent."
     },
     {
       title: "5. Termination",

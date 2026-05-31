@@ -7,7 +7,7 @@ const User           = require('../models/user.model');
 const Quiz           = require('../models/quiz.model');
 const jwt            = require('jsonwebtoken');
 
-const SECRET = process.env.JWT_SECRET || 'quiz-portal-secret-123';
+const SECRET = process.env.JWT_SECRET || 'examvault-secret-123';
 
 const getOrgForUser = async userId => {
   const user = await User.findById(userId).select('orgId role');

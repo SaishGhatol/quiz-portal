@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
 const jwt  = require('jsonwebtoken');
 
-const SECRET = process.env.JWT_SECRET || 'quiz-portal-secret-123';
+const SECRET = process.env.JWT_SECRET || 'examvault-secret-123';
 
 const signToken = (user) =>
   jwt.sign({ id: user._id, role: user.role }, SECRET, { expiresIn: '24h' });

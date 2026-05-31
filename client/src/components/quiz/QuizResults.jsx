@@ -124,7 +124,7 @@ const Certificate = ({ quizTitle, userName, scorePercentage, completionDate, onB
           <div className="mt-14 flex justify-center">
             <div className="text-center">
               <div className="w-40 border-t border-gray-400 pt-2 mx-auto">
-                <p className="text-sm font-semibold text-gray-700">Quiz Portal</p>
+                <p className="text-sm font-semibold text-gray-700">ExamVault</p>
                 <p className="text-xs text-gray-400">Authorised Issuer</p>
               </div>
             </div>

@@ -70,7 +70,7 @@ const Home = () => {
       {/* ── Hero ── */}
       <section className="max-w-3xl mx-auto px-6 pt-20 pb-16 text-center">
         <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-4 tracking-wide uppercase">
-          Quiz Portal
+          ExamVault
         </p>
         <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 dark:text-white leading-tight tracking-tight mb-5">
           Test your knowledge.<br />Track your progress.

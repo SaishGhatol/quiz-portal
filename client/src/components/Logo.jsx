@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Quiz Portal brand mark.
+ * ExamVault brand mark.
  * A quiz sheet (3 lines) with a checkmark — clean, scalable SVG.
  * Usage: <Logo size={32} /> or <Logo className="h-8 w-8" />
  */
@@ -13,7 +13,7 @@ const Logo = ({ size = 32, className = '' }) => (
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
-    aria-label="Quiz Portal logo"
+    aria-label="ExamVault logo"
   >
     {/* Background */}
     <rect width="32" height="32" rx="7" fill="#2563EB" />

@@ -244,7 +244,7 @@ const Profile = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your review</label>
                     <textarea required rows={4} value={review.content}
                       onChange={e => setReview(p => ({ ...p, content: e.target.value }))}
-                      placeholder="Tell us what you think about Quiz Portal…"
+                      placeholder="Tell us what you think about ExamVault…"
                       className={`${inputCls} resize-none`} />
                   </div>
                 </div>

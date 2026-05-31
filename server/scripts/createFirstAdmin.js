@@ -6,7 +6,7 @@ dotenv.config();
 
 async function createFirstAdmin() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz-portal');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/examvault');
     console.log('Connected to MongoDB');
     
     // Check if admin already exists

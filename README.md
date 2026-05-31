@@ -1,4 +1,4 @@
-# Quiz Portal
+# ExamVault
 
 An enterprise-ready quiz platform for tuition centres, schools, and training organisations. Built with the MERN stack — create quizzes, manage student batches, assign tests with deadlines, track performance, and issue certificates.
 
@@ -52,8 +52,8 @@ An enterprise-ready quiz platform for tuition centres, schools, and training org
 
 ### 1 — Clone
 ```bash
-git clone https://github.com/SaishGhatol/quiz-portal.git
-cd quiz-portal
+git clone https://github.com/SaishGhatol/examvault.git
+cd examvault
 ```
 
 ### 2 — Server setup
@@ -124,7 +124,7 @@ Or call `PUT /api/users/:id/role` with `{ "role": "admin" }` using a platform ad
 ## Project Structure
 
 ```
-quiz-portal/
+examvault/
 ├── client/                  # React frontend
 │   ├── src/
 │   │   ├── components/

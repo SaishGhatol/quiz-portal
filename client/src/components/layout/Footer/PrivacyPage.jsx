@@ -60,7 +60,7 @@ const PrivacyPage = () => {
         <div className="bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 md:p-8">
           <div className="space-y-8">
             <p className="text-lg text-gray-700 dark:text-gray-300">
-              Welcome to the Quiz Portal. We are committed to protecting your personal information and your right to privacy. If you have any questions or concerns about our policy, or our practices with regards to your personal information, please contact us.
+              Welcome to ExamVault. We are committed to protecting your personal information and your right to privacy. If you have any questions or concerns about our policy, or our practices with regards to your personal information, please contact us.
             </p>
             {policySections.map((section, index) => (
               <div key={index}>
