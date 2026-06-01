@@ -50,6 +50,9 @@ import EditQuiz        from './components/admin/EditQuiz';
 import ManageQuestions from './components/admin/ManageQuestions';
 import ManageUsers     from './components/admin/ManageUsers';
 import QuizStatistics  from './components/admin/QuizStatistics';
+import ManageReviews   from './components/admin/ManageReviews';
+import AdminAnalytics  from './components/admin/AdminAnalytics';
+import AdminReports    from './components/admin/AdminReports';
 
 // Organisation admin pages
 import OrgSetup       from './components/org/OrgSetup';
@@ -123,6 +126,9 @@ const App = () => (
                   <Route path="/admin/quizzes/:id/questions"  element={<ManageQuestions />} />
                   <Route path="/admin/quizzes/:id/statistics" element={<QuizStatistics />} />
                   <Route path="/admin/users"                  element={<ManageUsers />} />
+                  <Route path="/admin/reviews"               element={<ManageReviews />} />
+                  <Route path="/admin/analytics"             element={<AdminAnalytics />} />
+                  <Route path="/admin/reports"               element={<AdminReports />} />
                 </Route>
 
                 <Route path="*" element={<Navigate to="/" replace />} />

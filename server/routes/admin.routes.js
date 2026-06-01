@@ -9,6 +9,13 @@ router.use(authenticateJWT, isAdmin);
 // Dashboard stats
 router.get('/dashboard/stats', adminController.getDashboardStats);
 
+// Analytics
+router.get('/analytics', adminController.getAnalytics);
+
+// CSV exports
+router.get('/export/users',    adminController.exportUsersCSV);
+router.get('/export/attempts', adminController.exportAttemptsCSV);
+
 // Quiz management routes
 router.get('/quizzes', adminController.getAllQuizzes);
 router.post('/quizzes/create', adminController.createQuiz);

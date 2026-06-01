@@ -1,9 +1,10 @@
 // server/controllers/admin.controller.js
 const mongoose = require('mongoose');
-const Quiz = require('../models/quiz.model');
-const User = require('../models/user.model');
-const Attempt = require('../models/attempt.model');
+const Quiz     = require('../models/quiz.model');
+const User     = require('../models/user.model');
+const Attempt  = require('../models/attempt.model');
 const Question = require('../models/question.model');
+const Review   = require('../models/review.model');
 
 exports.getDashboardStats = async (req, res, next) => {
   try {
@@ -636,4 +637,116 @@ exports.updateQuestionOrder = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+exports.getAnalytics = async (req, res, next) => {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [attemptsByDay, usersByDay, scoreDistRaw, topQuizzes, passStats, pendingReviews] =
+      await Promise.all([
+        Attempt.aggregate([
+          { $match: { completedAt: { $gte: thirtyDaysAgo } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$completedAt' } }, count: { $sum: 1 } } },
+          { $sort: { _id: 1 } }
+        ]),
+        User.aggregate([
+          { $match: { createdAt: { $gte: thirtyDaysAgo } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+          { $sort: { _id: 1 } }
+        ]),
+        Attempt.aggregate([
+          { $match: { maxScore: { $gt: 0 } } },
+          { $project: { pct: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } } },
+          { $facet: {
+            a: [{ $match: { pct: { $lt: 20 } } },              { $count: 'n' }],
+            b: [{ $match: { pct: { $gte: 20, $lt: 40 } } },   { $count: 'n' }],
+            c: [{ $match: { pct: { $gte: 40, $lt: 60 } } },   { $count: 'n' }],
+            d: [{ $match: { pct: { $gte: 60, $lt: 80 } } },   { $count: 'n' }],
+            e: [{ $match: { pct: { $gte: 80 } } },             { $count: 'n' }],
+          }}
+        ]),
+        Attempt.aggregate([
+          { $match: { maxScore: { $gt: 0 } } },
+          { $group: { _id: '$quiz', count: { $sum: 1 }, avgPct: { $avg: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } } } },
+          { $sort: { count: -1 } },
+          { $limit: 5 },
+          { $lookup: { from: 'quizzes', localField: '_id', foreignField: '_id', as: 'q' } },
+          { $unwind: { path: '$q', preserveNullAndEmptyArrays: true } },
+          { $project: { title: { $ifNull: ['$q.title', 'Deleted Quiz'] }, attempts: '$count', avgScore: { $round: ['$avgPct', 1] } } }
+        ]),
+        Attempt.aggregate([
+          { $match: { maxScore: { $gt: 0 } } },
+          { $project: {
+            passed: { $cond: [{ $gte: [{ $divide: ['$score', '$maxScore'] }, 0.6] }, 1, 0] },
+            pct:    { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] }
+          }},
+          { $group: { _id: null, passCount: { $sum: '$passed' }, total: { $sum: 1 }, avgScore: { $avg: '$pct' } } }
+        ]),
+        Review.countDocuments({ approved: false }),
+      ]);
+
+    const sd = scoreDistRaw[0] || {};
+    const scoreDistribution = [
+      { range: '0–20%',   count: sd.a?.[0]?.n || 0 },
+      { range: '20–40%',  count: sd.b?.[0]?.n || 0 },
+      { range: '40–60%',  count: sd.c?.[0]?.n || 0 },
+      { range: '60–80%',  count: sd.d?.[0]?.n || 0 },
+      { range: '80–100%', count: sd.e?.[0]?.n || 0 },
+    ];
+
+    const ps = passStats[0] || { passCount: 0, total: 0, avgScore: 0 };
+
+    res.json({
+      attemptsByDay:    attemptsByDay.map(d => ({ date: d._id, count: d.count })),
+      usersByDay:       usersByDay.map(d => ({ date: d._id, count: d.count })),
+      scoreDistribution,
+      topQuizzes,
+      pendingReviews,
+      summary: {
+        passRate:  ps.total ? Math.round((ps.passCount / ps.total) * 100) : 0,
+        avgScore:  Math.round(ps.avgScore || 0),
+        totalAttempts: ps.total,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── CSV exports ───────────────────────────────────────────────────────────────
+exports.exportUsersCSV = async (req, res) => {
+  try {
+    const users = await User.find().select('-password').lean();
+    const esc = s => `"${String(s || '').replace(/"/g, '""')}"`;
+    const header = 'Name,Email,Role,Active,Joined\n';
+    const rows = users.map(u =>
+      [esc(u.name), esc(u.email), esc(u.role), esc(u.isActive ? 'Yes' : 'No'),
+       esc(new Date(u.createdAt).toISOString().split('T')[0])].join(',')
+    ).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="users-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(header + rows);
+  } catch { res.status(500).json({ message: 'Export failed' }); }
+};
+
+exports.exportAttemptsCSV = async (req, res) => {
+  try {
+    const attempts = await Attempt.find({ maxScore: { $gt: 0 } })
+      .populate('user', 'name email')
+      .populate('quiz', 'title')
+      .lean();
+    const esc = s => `"${String(s || '').replace(/"/g, '""')}"`;
+    const header = 'User,Email,Quiz,Score %,Passed,Date\n';
+    const rows = attempts.map(a => {
+      const pct  = Math.round((a.score / a.maxScore) * 100);
+      const date = new Date(a.completedAt || a.createdAt).toISOString().split('T')[0];
+      return [esc(a.user?.name), esc(a.user?.email), esc(a.quiz?.title),
+              esc(pct + '%'), esc(pct >= 60 ? 'Yes' : 'No'), esc(date)].join(',');
+    }).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="attempts-${new Date().toISOString().split('T')[0]}.csv"`);
+    res.send(header + rows);
+  } catch { res.status(500).json({ message: 'Export failed' }); }
 };

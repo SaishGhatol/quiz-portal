@@ -1,15 +1,51 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AuthContext from '../contexts/AuthContext';
-import { ArrowRight, BookOpen, Trophy, LayoutDashboard, Settings, Layers } from 'lucide-react';
+import { ArrowRight, BookOpen, Trophy, LayoutDashboard, Settings, Layers, Quote } from 'lucide-react';
 import api from '../utils/api';
+import { PricingSection } from './Pricing';
+
+const AVATAR_COLORS = [
+  'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
+  'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+  'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+];
+
+const initials = name =>
+  name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+const FALLBACK_REVIEWS = [
+  {
+    _id: 'f1',
+    name: 'Priya Mehta',
+    role: 'B.Sc. Computer Science, Year 2',
+    quote: 'The instant feedback after each quiz helped me pinpoint exactly where I was going wrong. My exam scores improved within two weeks.',
+  },
+  {
+    _id: 'f2',
+    name: 'James Okafor',
+    role: 'High School Science Teacher',
+    quote: 'I set up a timed quiz for my class in under five minutes. The live leaderboard kept every student engaged right to the end.',
+  },
+  {
+    _id: 'f3',
+    name: 'Sarah Lin',
+    role: 'L&D Manager, FinTech firm',
+    quote: 'We replaced our old paper-based onboarding tests overnight. Completion rates went up 40% and managers finally have real data.',
+  },
+];
 
 const Home = () => {
   const { currentUser, isAdmin, isOrgAdmin } = useContext(AuthContext);
   const [stats, setStats] = useState(null);
+  const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
     api.get('/quizzes/stats').then(r => setStats(r.data)).catch(() => {});
+    api.get('/reviews').then(r => setReviews(r.data)).catch(() => {});
   }, []);
 
   const actions = [
@@ -161,6 +197,37 @@ const Home = () => {
           ))}
         </div>
       </section>
+
+      {/* ── Testimonials ── */}
+      <div className="border-t border-gray-100 dark:border-gray-800" />
+      <section className="max-w-5xl mx-auto px-6 py-16">
+        <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-2 tracking-wide uppercase text-center">What people say</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-10 text-center">Loved by students, educators & teams</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {(reviews.length > 0 ? reviews : FALLBACK_REVIEWS).map((r, i) => (
+            <div
+              key={r._id}
+              className="flex flex-col gap-4 p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl"
+            >
+              <Quote className="h-5 w-5 text-indigo-300 dark:text-indigo-700 shrink-0" />
+              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed flex-1">"{r.quote}"</p>
+              <div className="flex items-center gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <span className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}>
+                  {initials(r.name)}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{r.name}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{r.role}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Pricing ── */}
+      <div className="border-t border-gray-100 dark:border-gray-800" />
+      <PricingSection />
 
       {/* ── CTA (only for unauthenticated visitors) ── */}
       {!currentUser && (

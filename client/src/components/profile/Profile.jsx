@@ -22,7 +22,7 @@ const Profile = () => {
 
   const [name,    setName]    = useState('');
   const [pwData,  setPwData]  = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  const [review,  setReview]  = useState({ rating: 0, content: '' });
+  const [review,  setReview]  = useState({ rating: 0, role: '', content: '' });
   const [preview, setPreview] = useState(null);
   const [imgFile, setImgFile] = useState(null);
   const [delConfirm, setDelConfirm] = useState(false);
@@ -58,11 +58,18 @@ const Profile = () => {
 
   const handleReviewSubmit = async e => {
     e.preventDefault();
+    if (!review.rating) return toast.error('Please select a rating');
+    if (!review.role.trim()) return toast.error('Please enter your role');
     load('review');
-    await new Promise(r => setTimeout(r, 800));
-    toast.success('Thanks for your feedback!');
-    setReview({ rating: 0, content: '' });
-    done('review');
+    try {
+      await api.post('/reviews', { role: review.role.trim(), quote: review.content, rating: review.rating });
+      toast.success('Thanks! Your review is now live on the homepage.');
+      setReview({ rating: 0, role: '', content: '' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit review');
+    } finally {
+      done('review');
+    }
   };
 
   const handleImageChange = e => {
@@ -239,6 +246,13 @@ const Profile = () => {
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your role</label>
+                    <input required value={review.role}
+                      onChange={e => setReview(p => ({ ...p, role: e.target.value }))}
+                      placeholder="e.g. B.Sc. Student, Teacher, L&D Manager…"
+                      className={inputCls} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your review</label>
