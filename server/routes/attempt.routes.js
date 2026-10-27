@@ -1,80 +1,38 @@
-// const express = require('express');
-// const router = express.Router();
-// const attemptController = require('../controllers/attempt.controller');
-// const { authenticateJWT } = require('../middleware/auth.middleware');
-
-// // Attempt routes
-// router.post('/start', authenticateJWT, attemptController.startAttempt);
-// router.post('/answer', authenticateJWT, attemptController.submitAnswer);
-// router.get('/user', authenticateJWT, attemptController.getUserAttempts);
-// router.get('/:id', attemptController.getAttemptById);
-
-// router.put('/:attemptId/complete', authenticateJWT, attemptController.completeAttempt);
-
-// router.get('/stats/:quizId', authenticateJWT, attemptController.getQuizStats);
-// router.get('/attempts/:id', authenticateJWT, attemptController.getAttemptDetails);
-
-// module.exports = router;
-
 const express = require('express');
 const router = express.Router();
 const attemptController = require('../controllers/attempt.controller');
-const { authenticateJWT,isAdmin } = require('../middleware/auth.middleware');
+const quizController = require('../controllers/quiz.controller');
+const { authenticateJWT, isAdmin } = require('../middleware/auth.middleware');
+const { objectIdParam } = require('../middleware/objectId.middleware');
+
+router.param('id', objectIdParam);
+
+// Attempts are created only through POST /api/quizzes/:id/start + /submit, which enforce
+// visibility, assignment limits and server-side timing. The old start/answer/complete
+// endpoints that used to live here bypassed all of that and have been removed.
 
 /**
  * @route   GET /api/attempts/user
- * @desc    Get attempts for the logged in user with optional filtering
- * @access  Private
+ * @desc    Attempts for the signed-in user
  */
 router.get('/user', authenticateJWT, attemptController.getAttemptsByUser);
 
 /**
  * @route   GET /api/attempts/all
- * @desc    Get all attempts (admin only)
- * @access  Private/Admin
+ * @desc    All attempts (platform admin only)
  */
-router.get('/all', isAdmin,authenticateJWT, attemptController.getAllAttempts);
-
-/**
- * @route   GET /api/attempts/stats/:quizId
- * @desc    Get statistics for a specific quiz
- * @access  Private/Admin or Quiz Creator
- */
-router.get('/stats/:quizId', authenticateJWT, attemptController.getQuizStats);
+router.get('/all', authenticateJWT, isAdmin, attemptController.getAllAttempts);
 
 /**
  * @route   GET /api/attempts/:id
- * @desc    Get a specific attempt by ID
- * @access  Private/Owner or Admin
+ * @desc    One attempt — its owner, platform admins, or admins of the quiz's organisation
  */
-router.get('/:id', authenticateJWT, attemptController.getAttemptById);
-
-/**
- * @route   POST /api/attempts/start
- * @desc    Start a new quiz attempt
- * @access  Private
- */
-router.post('/start', authenticateJWT, attemptController.startAttempt);
-
-/**
- * @route   POST /api/attempts/answer
- * @desc    Submit an answer for a question
- * @access  Private/Owner
- */
-router.post('/answer', authenticateJWT, attemptController.submitAnswer);
-
-/**
- * @route   POST /api/attempts/:attemptId/complete
- * @desc    Complete a quiz attempt
- * @access  Private/Owner
- */
-router.post('/:attemptId/complete', authenticateJWT, attemptController.completeAttempt);
+router.get('/:id', authenticateJWT, quizController.getAttemptDetail);
 
 /**
  * @route   DELETE /api/attempts/:id
- * @desc    Delete an attempt
- * @access  Private/Admin
+ * @desc    Delete an attempt (platform admin only)
  */
-router.delete('/:id', authenticateJWT, attemptController.deleteAttempt);
+router.delete('/:id', authenticateJWT, isAdmin, attemptController.deleteAttempt);
 
 module.exports = router;

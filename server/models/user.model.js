@@ -16,7 +16,8 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: true,
+    select: false   // never returned unless a query explicitly asks for '+password'
   },
   role: {
     type: String,
@@ -28,7 +29,19 @@ const userSchema = new mongoose.Schema({
   batchIds:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }],
 
   profilePicture: { type: String, default: '' },
-  lastLoginAt:    { type: Date, default: null }
+  lastLoginAt:    { type: Date, default: null },
+  // Deactivated users can't sign in and their existing tokens stop working
+  isActive:       { type: Boolean, default: true },
+  // Tokens issued before this moment are rejected (set when the password changes)
+  passwordChangedAt: { type: Date, default: null },
+  // Quizzes bookmarked for later
+  savedQuizzes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' }],
+  // Mistake-notebook questions answered correctly in practice since they were last missed
+  clearedMistakes: [{
+    _id: false,
+    question: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
+    at: { type: Date, default: Date.now },
+  }]
 }, { timestamps: true });
 
 // Hash password before saving

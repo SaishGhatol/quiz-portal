@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { Loader, Users, TrendingUp, CheckCircle, Trophy, ArrowLeft, Clock } from 'lucide-react';
+import { Users, TrendingUp, CheckCircle, Trophy, Clock } from 'lucide-react';
+import { Page, PageHeader, Spinner, ErrorState, EmptyState, StatCard } from '../ui';
 
 const OrgAnalytics = () => {
   const [data,    setData]    = useState(null);
@@ -14,19 +14,15 @@ const OrgAnalytics = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="flex justify-center items-center min-h-[50vh]"><Loader className="animate-spin h-6 w-6 text-indigo-500" /></div>;
-  if (!data)   return <div className="text-center py-20 text-sm text-gray-400">Could not load analytics.</div>;
+  if (loading) return <Page><Spinner label="Loading analytics" /></Page>;
+  if (!data)   return <Page><ErrorState title="Could not load analytics." /></Page>;
 
   const { overview, batchStats, recentActivity } = data;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+    <Page className="space-y-8">
 
-        <div>
-          <Link to="/org" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">← Organisation</Link>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">Analytics</h1>
-        </div>
+        <PageHeader back={{ to: '/org', label: 'Organisation' }} title="Analytics" />
 
         {/* Overview stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -34,26 +30,25 @@ const OrgAnalytics = () => {
             { label: 'Students',     value: overview.students,      icon: Users },
             { label: 'Batches',      value: overview.batches,       icon: TrendingUp },
             { label: 'Assignments',  value: overview.assignments,   icon: CheckCircle },
-            { label: 'Attempts',     value: overview.totalAttempts, icon: Trophy },
+            { label: 'Quiz attempts', value: overview.totalAttempts, icon: Trophy, hint: 'Own & assigned quizzes' },
             { label: 'Avg score',    value: `${overview.avgScore}%`, icon: TrendingUp },
-            { label: 'Pass rate',    value: `${overview.passRate}%`, icon: CheckCircle },
+            { label: 'Pass rate',    value: `${overview.passRate}%`, icon: CheckCircle, hint: "Vs each quiz's pass mark" },
           ].map((s, i) => (
-            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
-              <s.icon className="h-4 w-4 text-indigo-500 mb-2" />
-              <p className="text-xl font-bold text-gray-900 dark:text-white">{s.value}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
-            </div>
+            <StatCard key={i} icon={s.icon} label={s.label} value={s.value} hint={s.hint} />
           ))}
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 -mt-4">
+          {overview.attemptScope || 'Completed attempts by your students on your own and assigned quizzes'}. Admin attempts and deactivated batches aren't counted.
+        </p>
 
         {/* Batch performance */}
         <div>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Batch performance</h2>
           {batchStats.length === 0 ? (
-            <div className="text-sm text-gray-400 py-8 text-center">No batch data yet.</div>
+            <EmptyState compact title="No batch data yet." />
           ) : (
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-              <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card overflow-hidden">
+              <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
                 <span className="col-span-4">Batch</span>
                 <span className="col-span-2 text-right">Students</span>
                 <span className="col-span-2 text-right">Attempts</span>
@@ -63,7 +58,7 @@ const OrgAnalytics = () => {
                 {batchStats.map(b => (
                   <div key={b.batchId} className="grid grid-cols-12 items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <div className="col-span-4 flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: b.color || '#4f46e5' }} />
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: b.color || '#0b847c' }} />
                       <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{b.name}</span>
                     </div>
                     <span className="col-span-2 text-right text-sm text-gray-600 dark:text-gray-300">{b.studentCount}</span>
@@ -71,7 +66,7 @@ const OrgAnalytics = () => {
                     <div className="col-span-4 pl-4">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                          <div className="h-2 rounded-full bg-indigo-500" style={{ width: `${Math.min(b.avgScore, 100)}%` }} />
+                          <div className="h-2 rounded-full bg-brand-500" style={{ width: `${Math.min(b.avgScore, 100)}%` }} />
                         </div>
                         <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8">{b.avgScore}%</span>
                       </div>
@@ -87,9 +82,9 @@ const OrgAnalytics = () => {
         <div>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Recent activity</h2>
           {recentActivity.length === 0 ? (
-            <div className="text-sm text-gray-400 py-8 text-center">No quiz activity yet.</div>
+            <EmptyState compact title="No quiz activity yet." />
           ) : (
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card overflow-hidden">
               <div className="divide-y divide-gray-50 dark:divide-gray-800">
                 {recentActivity.map((a, i) => {
                   const score = a.score ?? 0;
@@ -115,8 +110,7 @@ const OrgAnalytics = () => {
           )}
         </div>
 
-      </div>
-    </div>
+    </Page>
   );
 };
 

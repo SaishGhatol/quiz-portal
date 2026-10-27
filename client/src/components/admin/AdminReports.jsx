@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { ArrowLeft, Download, Users, FileText, Loader, CheckCircle } from 'lucide-react';
+import { Download, Users, FileText, CheckCircle } from 'lucide-react';
+import { Page, PageHeader, Button } from '../ui';
 import { toast } from 'react-toastify';
 
 const REPORTS = [
@@ -11,7 +11,7 @@ const REPORTS = [
     desc: 'All registered users — name, email, role, status, join date.',
     icon: Users,
     filename: 'users',
-    color: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400',
+    color: 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400',
   },
   {
     key: 'attempts',
@@ -50,26 +50,20 @@ const AdminReports = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+    <Page width="md" className="space-y-8">
 
-        {/* Header */}
-        <div className="flex items-center gap-4">
-          <Link to="/admin" className="p-2 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <ArrowLeft className="h-4 w-4 text-gray-500" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Reports</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Download platform data as CSV</p>
-          </div>
-        </div>
+        <PageHeader
+          back={{ to: '/admin', label: 'Admin' }}
+          title="Reports"
+          description="Download platform data as CSV"
+        />
 
         {/* Report cards */}
         <div className="space-y-4">
           {REPORTS.map(r => (
             <div
               key={r.key}
-              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 flex items-start sm:items-center gap-5 flex-col sm:flex-row"
+              className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card p-6 flex items-start sm:items-center gap-5 flex-col sm:flex-row"
             >
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${r.color}`}>
                 <r.icon className="h-5 w-5" />
@@ -78,31 +72,24 @@ const AdminReports = () => {
                 <p className="font-semibold text-gray-900 dark:text-white">{r.title}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{r.desc}</p>
               </div>
-              <button
+              <Button
                 onClick={() => download(r)}
-                disabled={busy[r.key]}
-                className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors"
+                loading={!!busy[r.key]}
+                icon={done[r.key] ? CheckCircle : Download}
+                className="shrink-0"
               >
-                {busy[r.key] ? (
-                  <Loader className="h-4 w-4 animate-spin" />
-                ) : done[r.key] ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
                 {busy[r.key] ? 'Exporting…' : done[r.key] ? 'Downloaded' : 'Export CSV'}
-              </button>
+              </Button>
             </div>
           ))}
         </div>
 
         {/* Note */}
-        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400">
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4 text-sm text-amber-700 dark:text-amber-400">
           Exports include all records and may contain personal data. Handle in accordance with your data protection policy.
         </div>
 
-      </div>
-    </div>
+    </Page>
   );
 };
 

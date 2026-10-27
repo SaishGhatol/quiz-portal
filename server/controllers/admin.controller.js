@@ -1,134 +1,216 @@
 // server/controllers/admin.controller.js
 const mongoose = require('mongoose');
-const Quiz     = require('../models/quiz.model');
-const User     = require('../models/user.model');
-const Attempt  = require('../models/attempt.model');
-const Question = require('../models/question.model');
-const Review   = require('../models/review.model');
+const Quiz         = require('../models/quiz.model');
+const User          = require('../models/user.model');
+const Attempt       = require('../models/attempt.model');
+const Question      = require('../models/question.model');
+const Review        = require('../models/review.model');
+const Organization  = require('../models/organization.model');
+const Batch         = require('../models/batch.model');
+const { normalizeProctoring } = require('../utils/proctoring');
+const { canManageQuiz, escapeRegex } = require('../utils/quizAccess');
+const { PLANS, withinLimit } = require('../config/plans');
+
+const USER_ROLES = ['user', 'admin', 'org_admin', 'teacher'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const QUESTION_SORT = { order: 1, createdAt: 1 };
+const MAX_QUIZ_PAGE = 500;
+const MAX_USER_PAGE = 500;
+
+// "Active" in the database: accounts created before isActive existed have no field and count as active
+const ACTIVE_FILTER = { isActive: { $ne: false } };
+
+/** Parses an integer query value and clamps it into [min, max] */
+const clampInt = (value, fallback, min, max) => {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+};
+
+/** Mongoose ValidationError → readable { message, errors[] } (no internals like "Cast to date failed …") */
+const validationDetails = err => {
+  const errors = Object.values(err.errors || {}).map(e =>
+    e.name === 'CastError' ? `Invalid value for ${e.path}` : e.message
+  );
+  return { message: errors[0] || 'Invalid data', errors };
+};
+
+/** Quoted CSV cell; values starting with = + - @ tab or CR are prefixed with ' so spreadsheets don't run them */
+const csvCell = value => {
+  let s = value === null || value === undefined ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
+
+/**
+ * Message explaining why an organisation can't add another quiz, or null when it can.
+ * Limits come from the plan definition (config/plans.js), not org.limits, which is a
+ * snapshot taken when the organisation was created and goes stale after an upgrade.
+ */
+const quizLimitMessage = async (organizationId, verb = 'create') => {
+  if (!organizationId) return null;
+  const org = await Organization.findById(organizationId).select('plan');
+  if (!org) return null;
+  const plan = PLANS[org.plan] || PLANS.free;
+  const limit = plan.limits.maxQuizzes;
+  if (limit === -1) return null;
+  const count = await Quiz.countDocuments({ organization: organizationId });
+  if (withinLimit(count, limit)) return null;
+  return `Your ${plan.label} plan allows up to ${limit} quizzes. Upgrade your plan to ${verb} more.`;
+};
+
+/** Pass/fail against a quiz's own pass mark (a percentage); null when the quiz is gone */
+const passedFor = (pct, passScore) => (typeof passScore === 'number' ? pct >= passScore : null);
+
+// ── Multi-tenant scoping helpers ────────────────────────────────────────────
+// Platform admins (role 'admin') see/manage everything.
+// Org admins are scoped to their own organisation's quizzes and data only —
+// without this, any coaching institute admin could see or edit another
+// institute's quizzes, questions and student data.
+
+const getRequestOrgId = async (req) => {
+  if (req.userRole === 'admin') return null; // unrestricted
+  const user = await User.findById(req.userId).select('orgId');
+  return user?.orgId || null;
+};
 
 exports.getDashboardStats = async (req, res, next) => {
   try {
-    // Get counts from each collection
+    if (req.userRole === 'admin') {
+      const [totalQuizzes, totalUsers, totalAttempts, activeUsersCount] = await Promise.all([
+        Quiz.countDocuments(),
+        User.countDocuments(),
+        Attempt.countDocuments(),
+        User.countDocuments({
+          lastLoginAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        })
+      ]);
+      return res.status(200).json({ totalQuizzes, totalUsers, totalAttempts, activeUsers: activeUsersCount });
+    }
+
+    // Org admin: numbers scoped to their own organisation only
+    const orgId = await getRequestOrgId(req);
+    if (!orgId) return res.status(200).json({ totalQuizzes: 0, totalUsers: 0, totalAttempts: 0, activeUsers: 0 });
+
+    const orgQuizIds = (await Quiz.find({ organization: orgId }).select('_id')).map(q => q._id);
     const [totalQuizzes, totalUsers, totalAttempts, activeUsersCount] = await Promise.all([
-      Quiz.countDocuments(),
-       User.countDocuments(),
-      Attempt.countDocuments(),
-      // Active users defined as users who logged in within the last 30 days
+      orgQuizIds.length,
+      User.countDocuments({ orgId }),
+      Attempt.countDocuments({ quiz: { $in: orgQuizIds } }),
       User.countDocuments({
-        lastLoginAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        orgId, lastLoginAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
       })
     ]);
 
-    res.status(200).json({
-      totalQuizzes,
-      totalUsers,
-      totalAttempts,
-      activeUsers: activeUsersCount
-    });
+    res.status(200).json({ totalQuizzes, totalUsers, totalAttempts, activeUsers: activeUsersCount });
   } catch (error) {
     next(error);
   }
 };
-exports.createQuiz = async (req, res) => {
+
+exports.createQuiz = async (req, res, next) => {
   try {
-    const { title, description, category, difficulty, timeLimit, passScore, isPublished, startDate, endDate, tags } = req.body;
-    
-    
+    const { title, description, category, difficulty, timeLimit, passScore, isPublished, startDate, endDate, tags, proctoring } = req.body || {};
+
+    let organization = null;
+    if (req.userRole !== 'admin') {
+      const user = await User.findById(req.userId).select('orgId');
+      if (!user?.orgId)
+        return res.status(403).json({ message: 'You must belong to an organisation to create quizzes' });
+      organization = user.orgId;
+
+      const limitMessage = await quizLimitMessage(organization, 'create');
+      if (limitMessage) return res.status(403).json({ message: limitMessage });
+    }
+
+    const str = v => (v === undefined || v === null ? undefined : String(v));
+    const num = v => (v === undefined || v === null || v === '' ? undefined : v);
+    const tagList = Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',') : [];
+
     const quiz = new Quiz({
-      title,
-      description,
-      category,
+      title:       str(title),
+      description: str(description),
+      category:    str(category),
       difficulty,
-      timeLimit,
-      passScore,
-      isPublished: isPublished || false,
+      timeLimit:   num(timeLimit),
+      passScore:   num(passScore),
+      // A brand-new quiz has no questions yet, so it always starts as a draft: publishing
+      // it would list a quiz nobody can take. It's published once questions are added.
+      isPublished: false,
       startDate: startDate || null,
       endDate: endDate || null,
-      tags: tags || [],
-      createdBy: req.userId
+      tags: tagList.map(t => String(t).trim()).filter(Boolean),
+      proctoring: normalizeProctoring(proctoring),
+      createdBy: req.userId,
+      organization
     });
-    
+
     const savedQuiz = await quiz.save();
+    const wantedPublished = isPublished === true || isPublished === 'true';
     res.status(201).json({
-      message: 'Quiz created successfully',
+      message: wantedPublished
+        ? 'Quiz saved as a draft — add questions, then publish it.'
+        : 'Quiz created successfully',
+      publishDeferred: wantedPublished,
       quiz: savedQuiz
     });
   } catch (error) {
+    if (error.name === 'ValidationError') return res.status(400).json(validationDetails(error));
     console.error('Create quiz error:', error);
-    // Provide more detailed error message to client
-    res.status(500).json({ 
-      message: 'Server error creating quiz',
-      details: error.message 
-    });
+    next(error);
   }
 };
 
+const USER_SORT_FIELDS = new Set(['name', 'email', 'role', 'createdAt', 'lastLoginAt', 'isActive']);
+
 exports.getAllUsers = async (req, res, next) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      search = '',
-      sortField = 'name',
-      sortDirection = 'asc',
-      role,
-      status
-    } = req.query;
-    
-    // Create query object
+    const { search = '', sortField = 'name', sortDirection = 'asc', role, status } = req.query;
+    const page  = clampInt(req.query.page, 1, 1, 100000);
+    const limit = clampInt(req.query.limit, 10, 1, MAX_USER_PAGE);
+
     const query = {};
-    
-    // Add search functionality
-    if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
+
+    // Search is matched literally, never as a regular expression
+    if (typeof search === 'string' && search.trim()) {
+      const re = new RegExp(escapeRegex(search.trim()), 'i');
+      query.$or = [{ name: re }, { email: re }];
     }
-    
-    // Add role filter if provided
-    if (role && role !== 'all') {
+
+    if (typeof role === 'string' && role && role !== 'all') {
+      if (!USER_ROLES.includes(role)) return res.status(400).json({ message: 'Unknown role filter' });
       query.role = role;
     }
-    
-    // Add status filter if provided
-    if (status && status !== 'all') {
-      query.isActive = status === 'active';
-    }
-    
-    // Set sort order
-    const sort = {};
-    sort[sortField] = sortDirection === 'asc' ? 1 : -1;
-    
-    // Execute query with pagination
-    const users = await User.find(query)
-      .select('-password')
-      .sort(sort)
-      .limit(parseInt(limit))
-      .skip((page - 1) * parseInt(limit))
-      .exec();
-    
-    // Get total count for pagination
-    const total = await User.countDocuments(query);
-    
-    // For each user, get their quiz attempt count
-    const enhancedUsers = await Promise.all(users.map(async (user) => {
-      const attemptCount = await Attempt.countDocuments({ user: user._id });
-      const lastAttempt = await Attempt.findOne({ user: user._id })
-        .sort({ createdAt: -1 })
-        .select('createdAt');
-      
-      return {
-        ...user._doc,
-        attemptCount,
-        lastActivity: lastAttempt ? lastAttempt.createdAt : null
-      };
+
+    if (status === 'active') Object.assign(query, ACTIVE_FILTER);
+    else if (status === 'inactive') query.isActive = false;
+
+    const field = USER_SORT_FIELDS.has(sortField) ? sortField : 'name';
+    const sort = { [field]: sortDirection === 'desc' ? -1 : 1, _id: 1 };
+
+    const [users, total] = await Promise.all([
+      User.find(query).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
+      User.countDocuments(query)
+    ]);
+
+    // One aggregate for everyone's attempt stats instead of two queries per user
+    const stats = await Attempt.aggregate([
+      { $match: { user: { $in: users.map(u => u._id) } } },
+      { $group: { _id: '$user', attemptCount: { $sum: 1 }, lastActivity: { $max: '$createdAt' } } }
+    ]);
+    const byUser = new Map(stats.map(s => [String(s._id), s]));
+
+    const enhancedUsers = users.map(user => ({
+      ...user,
+      isActive: user.isActive !== false,
+      attemptCount: byUser.get(String(user._id))?.attemptCount || 0,
+      lastActivity: byUser.get(String(user._id))?.lastActivity || null
     }));
-    
+
     res.status(200).json({
       users: enhancedUsers,
-      totalPages: Math.ceil(total / parseInt(limit)),
-      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
       totalUsers: total
     });
   } catch (error) {
@@ -139,24 +221,27 @@ exports.getAllUsers = async (req, res, next) => {
 exports.getUserById = async (req, res, next) => {
   try {
     const userId = req.params.id;
-    
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: 'Invalid user ID format' });
     }
-    
-    const user = await User.findById(userId).select('-password');
-    
+
+    const user = await User.findById(userId).lean();
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    // Get user's attempts
+    user.isActive = user.isActive !== false;
+
+    // Recent attempts, with the quiz title for the activity list
     const attempts = await Attempt.find({ user: userId })
       .sort({ createdAt: -1 })
-      .limit(5);
-      
+      .limit(5)
+      .select('-answers -violations')
+      .populate('quiz', 'title passScore');
+
     const attemptCount = await Attempt.countDocuments({ user: userId });
-    
+
     res.status(200).json({
       user,
       recentAttempts: attempts,
@@ -170,13 +255,13 @@ exports.getUserById = async (req, res, next) => {
 exports.createUser = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
-    
+
     // Check if user with email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({ message: 'User with this email already exists' });
     }
-    
+
     // Create new user
     const user = new User({
       name,
@@ -186,13 +271,13 @@ exports.createUser = async (req, res, next) => {
       isActive: true,
       createdAt: new Date()
     });
-    
+
     await user.save();
-    
+
     // Return the user without password
     const newUser = user.toObject();
     delete newUser.password;
-    
+
     res.status(201).json({
       message: 'User created successfully',
       user: newUser
@@ -202,48 +287,84 @@ exports.createUser = async (req, res, next) => {
   }
 };
 
+/** Whether demoting / deactivating / deleting `user` would leave the platform without an active admin */
+const isLastActiveAdmin = async user => {
+  if (user.role !== 'admin' || user.isActive === false) return false;
+  const others = await User.countDocuments({ _id: { $ne: user._id }, role: 'admin', ...ACTIVE_FILTER });
+  return others === 0;
+};
+
 exports.updateUser = async (req, res, next) => {
   try {
     const userId = req.params.id;
-    const { name, email, role, isActive } = req.body;
-    
+    const { name, email, role, isActive } = req.body || {};
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: 'Invalid user ID format' });
     }
-    
-    // Find user first to check if exists
+
+    const update = {};
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ message: 'Name cannot be empty' });
+      if (name.trim().length > 100) return res.status(400).json({ message: 'Name must be 100 characters or fewer' });
+      update.name = name.trim();
+    }
+    if (email !== undefined) {
+      if (typeof email !== 'string' || email.length > 254 || !EMAIL_RE.test(email.trim()))
+        return res.status(400).json({ message: 'Please enter a valid email address' });
+      update.email = email.trim().toLowerCase();
+    }
+    if (role !== undefined) {
+      if (!USER_ROLES.includes(role)) return res.status(400).json({ message: `Role must be one of: ${USER_ROLES.join(', ')}` });
+      update.role = role;
+    }
+    if (isActive !== undefined) {
+      if (typeof isActive !== 'boolean') return res.status(400).json({ message: 'isActive must be true or false' });
+      update.isActive = isActive;
+    }
+    if (!Object.keys(update).length) {
+      return res.status(400).json({ message: 'Nothing to update — send name, email, role or isActive' });
+    }
+
     const user = await User.findById(userId);
-    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    // Check if email is being changed and if it's unique
-    if (email && email !== user.email) {
-      const emailExists = await User.findOne({ email, _id: { $ne: userId } });
+
+    const losesAdmin   = update.role !== undefined && update.role !== 'admin' && user.role === 'admin';
+    const deactivating = update.isActive === false && user.isActive !== false;
+
+    // Admins can't lock themselves out…
+    if (String(userId) === String(req.userId)) {
+      if (losesAdmin)   return res.status(400).json({ message: "You can't remove your own admin role. Ask another platform admin to do it." });
+      if (deactivating) return res.status(400).json({ message: "You can't deactivate your own account." });
+    }
+
+    // …and the platform always keeps at least one active admin
+    if ((losesAdmin || deactivating) && await isLastActiveAdmin(user)) {
+      return res.status(400).json({ message: 'This is the last active platform admin. Make someone else an admin first.' });
+    }
+
+    if (update.email && update.email !== user.email) {
+      const emailExists = await User.exists({ email: update.email, _id: { $ne: userId } });
       if (emailExists) {
         return res.status(409).json({ message: 'Email is already in use' });
       }
     }
-    
-    // Update fields
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { 
-        name: name || user.name,
-        email: email || user.email,
-        role: role || user.role,
-        isActive: isActive !== undefined ? isActive : user.isActive,
-        updatedAt: new Date()
-      },
+      { $set: update },
       { new: true, runValidators: true }
-    ).select('-password');
-    
+    ).lean();
+    updatedUser.isActive = updatedUser.isActive !== false;
+
     res.status(200).json({
       message: 'User updated successfully',
       user: updatedUser
     });
   } catch (error) {
+    if (error.name === 'ValidationError') return res.status(400).json(validationDetails(error));
     next(error);
   }
 };
@@ -251,29 +372,45 @@ exports.updateUser = async (req, res, next) => {
 exports.deleteUser = async (req, res, next) => {
   try {
     const userId = req.params.id;
-    
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ message: 'Invalid user ID format' });
     }
-    
-    // Find user to confirm they exist before deleting
+
+    if (String(userId) === String(req.userId)) {
+      return res.status(400).json({ message: "You can't delete your own account." });
+    }
+
     const user = await User.findById(userId);
-    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    
-    // Check for admin trying to delete themselves
-    if (user.role === 'admin' && req.userId === userId) {
-      return res.status(403).json({ message: 'Admins cannot delete their own accounts' });
+
+    if (await isLastActiveAdmin(user)) {
+      return res.status(400).json({ message: 'This is the last active platform admin and cannot be deleted.' });
     }
-    
-    // Delete user's attempts first to maintain referential integrity
-    await Attempt.deleteMany({ user: userId });
-    
-    // Delete the user
+
+    // Someone who runs an organisation can't just disappear: the organisation would be left
+    // with no admin, no contact and quizzes only a platform admin could edit.
+    const org = await Organization.findOne({ $or: [{ createdBy: userId }, { adminUsers: userId }] }).select('name');
+    if (org) {
+      return res.status(409).json({
+        message: `${user.name} administers "${org.name}". Hand the organisation to another admin (or remove it) first — or deactivate this account instead.`
+      });
+    }
+
+    // Remove the user's personal records so nothing points at a missing account
+    let QuizSession = null;
+    try { QuizSession = require('../models/quizSession.model'); } catch { /* model not present */ }
+    await Promise.all([
+      Attempt.deleteMany({ user: userId }),
+      Review.deleteMany({ userId }),
+      Batch.updateMany({ students: userId }, { $pull: { students: userId } }),
+      QuizSession ? QuizSession.deleteMany({ user: userId }) : null,
+    ]);
+
     await User.findByIdAndDelete(userId);
-    
+
     res.status(200).json({
       message: 'User and associated data deleted successfully'
     });
@@ -281,59 +418,7 @@ exports.deleteUser = async (req, res, next) => {
     next(error);
   }
 };
-exports.getAllAttempts = async (req, res, next) => {
-  try {
-    const { page = 1, limit = 10, search = '', sortBy = 'completedAt', order = 'desc' } = req.query;
 
-    // Create query object
-    const query = {};
-    if (search) {
-      // If searching, we need to find users and quizzes matching the search term first
-      const users = await User.find({ name: { $regex: search, $options: 'i' } });
-      const quizzes = await Quiz.find({ title: { $regex: search, $options: 'i' } });
-
-      const userIds = users.map(user => user._id);
-      const quizIds = quizzes.map(quiz => quiz._id);
-
-      if (userIds.length > 0 || quizIds.length > 0) {
-        query.$or = [];
-
-        if (userIds.length > 0) {
-          query.$or.push({ user: { $in: userIds } });
-        }
-
-        if (quizIds.length > 0) {
-          query.$or.push({ quiz: { $in: quizIds } });
-        }
-      }
-    }
-
-    // Set sort order
-    const sort = {};
-    sort[sortBy] = order === 'asc' ? 1 : -1;
-
-    // Execute query with pagination
-    const attempts = await Attempt.find(query)
-      .populate('user', 'name email') // FIXED
-      .populate('quiz', 'title')      // FIXED
-      .sort(sort)
-      .limit(parseInt(limit))
-      .skip((page - 1) * limit)
-      .exec();
-
-    // Get total count for pagination
-    const total = await Attempt.countDocuments(query);
-
-    res.status(200).json({
-      attempts,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 exports.getAttemptById = async (req, res, next) => {
   try {
     const attempt = await Attempt.findById(req.params.id)
@@ -351,225 +436,130 @@ exports.getAttemptById = async (req, res, next) => {
     next(error);
   }
 };
-exports.getQuizById = async (req, res, next) => {
-  try {
-    // Handle special cases
-    if (req.params.id === "recent") {
-      const recentQuizzes = await Quiz.find()
-        .sort({ createdAt: -1 })
-        .limit(1);
 
-      if (recentQuizzes.length === 0) {
-        return res.status(404).json({ message: 'No quizzes found' });
-      }
-
-      return res.status(200).json({ quiz: recentQuizzes[0] });
-    }
-    
-    // Handle "attempts" special case
-    if (req.params.id === "attempts") {
-      // Depending on what you want to achieve with "attempts", implement appropriate logic
-      // For example, if you want to get quizzes with most attempts:
-      const quizzesWithAttempts = await Quiz.find()
-        .sort({ attemptCount: -1 }) // Assuming you have an attemptCount field
-        .limit(10);
-        
-      return res.status(200).json({ quizzes: quizzesWithAttempts });
-    }
-
-    // Regular case - find by ID
-    // Validate that the ID is a valid ObjectId before querying
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ message: 'Invalid quiz ID format' });
-    }
-    
-    const quiz = await Quiz.findById(req.params.id);
-
-    if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
-    }
-
-    res.status(200).json({ quiz });
-  } catch (error) {
-    next(error);
-  }
-};
 exports.getRecentAttempts = async (req, res) => {
   try {
-    const quizId = req.params.id;
-    const limit =  10;
+    const limit = 10;
+    const query = { completedAt: { $ne: null } };
 
-    // Verify the quiz ID is valid
-    if (!quizId) {
-      return res.status(400).json({ message: 'Quiz ID is required' });
+    // Org admins only see recent activity from their own organisation's quizzes
+    if (req.userRole !== 'admin') {
+      const orgId = await getRequestOrgId(req);
+      const orgQuizIds = orgId
+        ? (await Quiz.find({ organization: orgId }).select('_id')).map(q => q._id)
+        : [];
+      query.quiz = { $in: orgQuizIds };
     }
 
-    const attempts = await Attempt.find({ quiz: quizId })
-      .sort({ createdAt: -1 })
+    const attempts = await Attempt.find(query)
+      .sort({ completedAt: -1 })
       .limit(limit)
+      .select('-answers -violations')
       .populate({
-        path: 'user',  // Using 'user' instead of 'userId'
+        path: 'user',
         select: 'name email',
         model: 'User',
         strictPopulate: false
-      });
+      })
+      .populate('quiz', 'title passScore');
 
     const formattedAttempts = attempts.map(attempt => {
-      // Calculate percentage score and round to 2 decimal places
-      const percentageScore = attempt.maxScore > 0 
-        ? (attempt.score / attempt.maxScore) * 100 
+      const percentageScore = attempt.maxScore > 0
+        ? (attempt.score / attempt.maxScore) * 100
         : 0;
 
-      // Calculate time taken in seconds
+      // Time taken in seconds
       const timeTaken = attempt.completedAt && attempt.startedAt
         ? Math.floor((new Date(attempt.completedAt) - new Date(attempt.startedAt)) / 1000)
         : null;
 
       return {
-        _id: attempt._id,  // Fixed property name (removed extra underscore)
-        score: Math.round(percentageScore), // Rounding to whole number
+        _id: attempt._id,
+        score: Math.round(percentageScore),
+        passed: passedFor(percentageScore, attempt.quiz?.passScore),
         timeTaken,
         createdAt: attempt.createdAt,
+        completedAt: attempt.completedAt,
+        quiz: attempt.quiz
+          ? { _id: attempt.quiz._id, title: attempt.quiz.title, passScore: attempt.quiz.passScore }
+          : null,
         user: attempt.user
           ? { name: attempt.user.name, email: attempt.user.email }
           : null,
       };
     });
 
-    return res.json({ 
+    return res.json({
       success: true,
       attempts: formattedAttempts,
       count: formattedAttempts.length
     });
   } catch (err) {
     console.error('Error fetching attempts:', err);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching quiz attempts', 
-      error: process.env.NODE_ENV === 'production' ? null : err.message 
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching quiz attempts',
+      error: process.env.NODE_ENV === 'production' ? null : err.message
     });
   }
 };
-exports.getAllQuestions = async (req, res) => {
-  try {
-    const questions = await Question.find();
-    res.status(200).json(questions);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching questions', error: error.message });
-  }
-};
-exports.getQuizQuestions = async (req, res, next) => {
-  try {
-    const quizId = req.params.id;
-    const questions = await Question.find({ quizId });
-    res.status(200).json(questions);
-  } catch (error) {
-    next(error);
-  }
-};
-exports.addQuestion = async (req, res, next) => {
-  try {
-    const quizId = req.params.id;
-    const { text, options, correctOption } = req.body;
-    const question = new Question({ quizId, text, options, correctOption });
-    await question.save();
-    res.status(201).json(question);
-  } catch (error) {
-    next(error);
-  }
-};
-exports.updateQuestion = async (req, res, next) => {
-  try {
-    const quizId = req.params.id;
-    const questionId = req.params.questionId;
-    const { text, options, correctOption } = req.body;
-    const question = await Question.findById(questionId);
-    if (!question) {
-      return res.status(404).json({ message: 'Question not found' });
-    }
-    question.text = text;
-    question.options = options;
-    question.correctOption = correctOption;
-    await question.save();
-    res.status(200).json(question);
-  } catch (error) {
-    next(error);
-  }
-};
-exports.reorderQuestion = async (req, res, next) => {
-  try {
-    const { id: quizId, questionId } = req.params;
-    const { newPosition } = req.body;
 
-    // Find the quiz
-    const quiz = await Quiz.findById(quizId);
-    if (!quiz) {
-      return res.status(404).json({ message: 'Quiz not found' });
-    }
+const QUIZ_SORT_FIELDS = new Set(['createdAt', 'updatedAt', 'title', 'totalAttempts', 'totalQuestions', 'category']);
 
-    // Find the question
-    const question = await Question.findById(questionId);
-    if (!question) {
-      return res.status(404).json({ message: 'Question not found' });
-    }
-
-    // Update the question's position
-    // This implementation depends on how you're storing question order
-    // Assuming you might have an 'order' field in your Question model
-    question.order = newPosition;
-    await question.save();
-
-    res.status(200).json({
-      message: 'Question reordered successfully',
-      question
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 exports.getAllQuizzes = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search = '', sortBy = 'createdAt', order = 'desc' } = req.query;
+    const { search = '', sortBy = 'createdAt', order = 'desc', status = 'all' } = req.query;
+    const page  = clampInt(req.query.page, 1, 1, 100000);
+    const limit = clampInt(req.query.limit, 50, 1, MAX_QUIZ_PAGE);
 
-    // Create query object
-    const query = {};
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
+    // Org admins only ever see their own organisation's quizzes
+    const scope = req.userRole !== 'admin' ? { organization: await getRequestOrgId(req) } : {};
+    const query = { ...scope };
+
+    // Search is matched literally, never as a regular expression
+    if (typeof search === 'string' && search.trim()) {
+      const re = new RegExp(escapeRegex(search.trim()), 'i');
+      query.$or = [{ title: re }, { description: re }, { category: re }, { tags: re }];
     }
+    if (status === 'published') query.isPublished = true;
+    else if (status === 'draft') query.isPublished = false;
 
-    // Set sort order
-    const sort = {};
-    sort[sortBy] = order === 'asc' ? 1 : -1;
+    const field = QUIZ_SORT_FIELDS.has(sortBy) ? sortBy : 'createdAt';
+    const sort = { [field]: order === 'asc' ? 1 : -1, _id: -1 };
 
-    // Execute query with pagination
-    const quizzes = await Quiz.find(query)
-      .populate('createdBy', 'name email') // Fixed populate to specify the field and what to populate
-      .sort(sort)
-      .limit(parseInt(limit))
-      .skip((page - 1) * limit)
-      .exec();
+    const [quizzes, total, allCount, publishedCount] = await Promise.all([
+      Quiz.find(query)
+        .populate('createdBy', 'name email')
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+      Quiz.countDocuments(query),
+      Quiz.countDocuments(scope),
+      Quiz.countDocuments({ ...scope, isPublished: true }),
+    ]);
 
-    // Get total count for pagination
-    const total = await Quiz.countDocuments(query);
-
-    // Format response to match what frontend expects
     res.status(200).json({
       quizzes,
       totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      total
+      currentPage: page,
+      limit,
+      total,
+      counts: { all: allCount, published: publishedCount, draft: allCount - publishedCount }
     });
   } catch (error) {
     console.error('Error fetching quizzes:', error);
     next(error);
   }
 };
+
 exports.getRecentQuizzes = async (req, res, next) => {
   try {
-    const quizzes = await Quiz.find()
+    const query = {};
+    if (req.userRole !== 'admin') {
+      query.organization = await getRequestOrgId(req);
+    }
+    const quizzes = await Quiz.find(query)
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(50)
@@ -586,53 +576,88 @@ exports.duplicateQuiz = async (req, res, next) => {
   try {
     const original = await Quiz.findById(req.params.id);
     if (!original) return res.status(404).json({ message: 'Quiz not found' });
+    if (!(await canManageQuiz(req, original))) {
+      return res.status(403).json({ message: 'Access denied — this quiz belongs to another organisation' });
+    }
 
+    const limitMessage = await quizLimitMessage(original.organization, 'duplicate');
+    if (limitMessage) return res.status(403).json({ message: limitMessage });
+
+    const suffix = ' (Copy)';
     const copy = await Quiz.create({
-      title:        `${original.title} (Copy)`,
+      title:        `${original.title.slice(0, 200 - suffix.length)}${suffix}`,
       description:  original.description,
       category:     original.category,
       difficulty:   original.difficulty,
       timeLimit:    original.timeLimit,
       passScore:    original.passScore,
       tags:         original.tags,
+      startDate:    original.startDate,
+      endDate:      original.endDate,
+      proctoring:   original.proctoring?.toObject ? original.proctoring.toObject() : original.proctoring,
       isPublished:  false,          // copies start as draft
       createdBy:    req.userId,
+      organization: original.organization,
     });
 
-    // Copy all questions
-    const Question = require('../models/question.model');
-    const origQuestions = await Question.find({ quizId: original._id });
+    // Copy all questions, keeping their order
+    const origQuestions = await Question.find({ quizId: original._id }).sort(QUESTION_SORT).lean();
     if (origQuestions.length) {
-      const cloned = origQuestions.map(q => ({
+      const cloned = origQuestions.map((q, idx) => ({
         quizId:      copy._id,
         text:        q.text,
-        type:        q.type,
-        options:     q.options,
+        type:        q.type || 'single',
+        options:     (q.options || []).map(o => ({ text: o.text, isCorrect: o.isCorrect === true })),
         points:      q.points,
         explanation: q.explanation,
+        order:       idx,
       }));
       await Question.insertMany(cloned);
       await Quiz.findByIdAndUpdate(copy._id, { totalQuestions: cloned.length });
+      copy.totalQuestions = cloned.length;
     }
 
     res.status(201).json({ message: 'Quiz duplicated', quiz: copy });
   } catch (error) {
+    if (error.name === 'ValidationError') return res.status(400).json(validationDetails(error));
     next(error);
   }
 };
 
-// Update question order
+// Update question order: body { questionIds } must list every question of the quiz exactly once
 exports.updateQuestionOrder = async (req, res, next) => {
   try {
-    const { questionIds } = req.body;
-    const Question = require('../models/question.model');
-    // Assign order by updating createdAt timestamps to maintain sequence
-    const now = Date.now();
-    await Promise.all(
-      questionIds.map((qid, idx) =>
-        Question.findByIdAndUpdate(qid, { createdAt: new Date(now + idx * 1000) })
-      )
-    );
+    const { questionIds } = req.body || {};
+    if (!Array.isArray(questionIds) || questionIds.length === 0) {
+      return res.status(400).json({ message: 'questionIds must be a non-empty array' });
+    }
+    if (questionIds.some(id => typeof id !== 'string' || !mongoose.Types.ObjectId.isValid(id))) {
+      return res.status(400).json({ message: 'questionIds contains an invalid id' });
+    }
+    if (new Set(questionIds).size !== questionIds.length) {
+      return res.status(400).json({ message: 'questionIds contains duplicates' });
+    }
+
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: 'Quiz not found' });
+    if (!(await canManageQuiz(req, quiz))) {
+      return res.status(403).json({ message: 'Access denied — this quiz belongs to another organisation' });
+    }
+
+    const [owned, total] = await Promise.all([
+      Question.countDocuments({ _id: { $in: questionIds }, quizId: quiz._id }),
+      Question.countDocuments({ quizId: quiz._id }),
+    ]);
+    if (owned !== questionIds.length) {
+      return res.status(400).json({ message: 'Some of those questions do not belong to this quiz' });
+    }
+    if (owned !== total) {
+      return res.status(400).json({ message: 'Send every question in this quiz exactly once' });
+    }
+
+    await Question.bulkWrite(questionIds.map((qid, idx) => ({
+      updateOne: { filter: { _id: qid, quizId: quiz._id }, update: { $set: { order: idx } } }
+    })));
     res.json({ message: 'Order updated' });
   } catch (error) {
     next(error);
@@ -643,6 +668,7 @@ exports.updateQuestionOrder = async (req, res, next) => {
 exports.getAnalytics = async (req, res, next) => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const pctExpr = { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] };
 
     const [attemptsByDay, usersByDay, scoreDistRaw, topQuizzes, passStats, pendingReviews] =
       await Promise.all([
@@ -658,7 +684,7 @@ exports.getAnalytics = async (req, res, next) => {
         ]),
         Attempt.aggregate([
           { $match: { maxScore: { $gt: 0 } } },
-          { $project: { pct: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } } },
+          { $project: { pct: pctExpr } },
           { $facet: {
             a: [{ $match: { pct: { $lt: 20 } } },              { $count: 'n' }],
             b: [{ $match: { pct: { $gte: 20, $lt: 40 } } },   { $count: 'n' }],
@@ -669,20 +695,25 @@ exports.getAnalytics = async (req, res, next) => {
         ]),
         Attempt.aggregate([
           { $match: { maxScore: { $gt: 0 } } },
-          { $group: { _id: '$quiz', count: { $sum: 1 }, avgPct: { $avg: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } } } },
+          { $group: { _id: '$quiz', count: { $sum: 1 }, avgPct: { $avg: pctExpr } } },
           { $sort: { count: -1 } },
           { $limit: 5 },
           { $lookup: { from: 'quizzes', localField: '_id', foreignField: '_id', as: 'q' } },
           { $unwind: { path: '$q', preserveNullAndEmptyArrays: true } },
           { $project: { title: { $ifNull: ['$q.title', 'Deleted Quiz'] }, attempts: '$count', avgScore: { $round: ['$avgPct', 1] } } }
         ]),
+        // Pass/fail uses each quiz's own passScore (a percentage). Attempts on deleted quizzes
+        // have no pass mark: they count towards the average score but not the pass rate.
         Attempt.aggregate([
           { $match: { maxScore: { $gt: 0 } } },
+          { $lookup: { from: 'quizzes', localField: 'quiz', foreignField: '_id', as: 'q' } },
+          { $project: { pct: pctExpr, passScore: { $arrayElemAt: ['$q.passScore', 0] } } },
           { $project: {
-            passed: { $cond: [{ $gte: [{ $divide: ['$score', '$maxScore'] }, 0.6] }, 1, 0] },
-            pct:    { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] }
+            pct: 1,
+            graded: { $cond: [{ $isNumber: '$passScore' }, 1, 0] },
+            passed: { $cond: [{ $and: [{ $isNumber: '$passScore' }, { $gte: ['$pct', '$passScore'] }] }, 1, 0] }
           }},
-          { $group: { _id: null, passCount: { $sum: '$passed' }, total: { $sum: 1 }, avgScore: { $avg: '$pct' } } }
+          { $group: { _id: null, passCount: { $sum: '$passed' }, graded: { $sum: '$graded' }, total: { $sum: 1 }, avgScore: { $avg: '$pct' } } }
         ]),
         Review.countDocuments({ approved: false }),
       ]);
@@ -696,7 +727,7 @@ exports.getAnalytics = async (req, res, next) => {
       { range: '80–100%', count: sd.e?.[0]?.n || 0 },
     ];
 
-    const ps = passStats[0] || { passCount: 0, total: 0, avgScore: 0 };
+    const ps = passStats[0] || { passCount: 0, graded: 0, total: 0, avgScore: 0 };
 
     res.json({
       attemptsByDay:    attemptsByDay.map(d => ({ date: d._id, count: d.count })),
@@ -705,7 +736,7 @@ exports.getAnalytics = async (req, res, next) => {
       topQuizzes,
       pendingReviews,
       summary: {
-        passRate:  ps.total ? Math.round((ps.passCount / ps.total) * 100) : 0,
+        passRate:  ps.graded ? Math.round((ps.passCount / ps.graded) * 100) : 0,
         avgScore:  Math.round(ps.avgScore || 0),
         totalAttempts: ps.total,
       },
@@ -716,37 +747,39 @@ exports.getAnalytics = async (req, res, next) => {
 };
 
 // ── CSV exports ───────────────────────────────────────────────────────────────
+const isoDay = d => (d ? new Date(d).toISOString().split('T')[0] : '');
+
+const sendCsv = (res, name, header, rows) => {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}-${isoDay(new Date())}.csv"`);
+  res.send([header, ...rows].map(r => r.map(csvCell).join(',')).join('\n'));
+};
+
 exports.exportUsersCSV = async (req, res) => {
   try {
-    const users = await User.find().select('-password').lean();
-    const esc = s => `"${String(s || '').replace(/"/g, '""')}"`;
-    const header = 'Name,Email,Role,Active,Joined\n';
-    const rows = users.map(u =>
-      [esc(u.name), esc(u.email), esc(u.role), esc(u.isActive ? 'Yes' : 'No'),
-       esc(new Date(u.createdAt).toISOString().split('T')[0])].join(',')
-    ).join('\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="users-${new Date().toISOString().split('T')[0]}.csv"`);
-    res.send(header + rows);
+    const users = await User.find().select('name email role isActive createdAt').lean();
+    sendCsv(res, 'users', ['Name', 'Email', 'Role', 'Active', 'Joined'],
+      users.map(u => [u.name, u.email, u.role, u.isActive !== false ? 'Yes' : 'No', isoDay(u.createdAt)]));
   } catch { res.status(500).json({ message: 'Export failed' }); }
 };
 
 exports.exportAttemptsCSV = async (req, res) => {
   try {
     const attempts = await Attempt.find({ maxScore: { $gt: 0 } })
+      .select('user quiz score maxScore completedAt createdAt')
       .populate('user', 'name email')
-      .populate('quiz', 'title')
+      .populate('quiz', 'title passScore')
       .lean();
-    const esc = s => `"${String(s || '').replace(/"/g, '""')}"`;
-    const header = 'User,Email,Quiz,Score %,Passed,Date\n';
-    const rows = attempts.map(a => {
-      const pct  = Math.round((a.score / a.maxScore) * 100);
-      const date = new Date(a.completedAt || a.createdAt).toISOString().split('T')[0];
-      return [esc(a.user?.name), esc(a.user?.email), esc(a.quiz?.title),
-              esc(pct + '%'), esc(pct >= 60 ? 'Yes' : 'No'), esc(date)].join(',');
-    }).join('\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="attempts-${new Date().toISOString().split('T')[0]}.csv"`);
-    res.send(header + rows);
+    sendCsv(res, 'attempts', ['User', 'Email', 'Quiz', 'Score %', 'Pass mark %', 'Passed', 'Date'],
+      attempts.map(a => {
+        const pct = (a.score / a.maxScore) * 100;
+        const passed = passedFor(pct, a.quiz?.passScore);
+        return [
+          a.user?.name ?? 'Deleted user', a.user?.email ?? '', a.quiz?.title ?? 'Deleted quiz',
+          `${Math.round(pct)}%`, a.quiz ? `${a.quiz.passScore}%` : '',
+          passed === null ? 'Unknown' : passed ? 'Yes' : 'No',
+          isoDay(a.completedAt || a.createdAt)
+        ];
+      }));
   } catch { res.status(500).json({ message: 'Export failed' }); }
 };

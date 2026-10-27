@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import AuthContext from '../../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import SkeletonBlock, { Bar, StatCardsSkeleton, ListSkeleton } from '../Skeleton';
+import { Page, PageHeader, Button, StatCard } from '../ui';
 import {
-  Loader, Users, BookOpen, Trophy, TrendingUp, Plus, ArrowRight,
-  BarChart2, Download, Star, MessageSquare, Settings, Shield,
+  Users, BookOpen, Trophy, TrendingUp, Plus, ArrowRight,
+  BarChart2, Download, Star,
 } from 'lucide-react';
 
 const AdminDashboard = () => {
@@ -11,11 +14,13 @@ const AdminDashboard = () => {
   const [pending,  setPending]  = useState(0);
   const [recent,   setRecent]   = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const { isAdmin } = useContext(AuthContext);
 
   useEffect(() => {
     Promise.all([
-      api.get('/admin/dashboard/stats'),
-      api.get('/reviews/all').catch(() => ({ data: [] })),
+      api.get('/admin/dashboard/stats').catch(() => ({ data: null })),
+      // Review moderation is platform-admin only
+      isAdmin ? api.get('/reviews/all').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       api.get('/admin/quizzes/attempts/recent').catch(() => ({ data: { attempts: [] } })),
     ]).then(([statsRes, reviewsRes, attemptsRes]) => {
       setStats(statsRes.data);
@@ -24,53 +29,61 @@ const AdminDashboard = () => {
       const attempts = attemptsRes.data?.attempts || [];
       setRecent(attempts.slice(0, 5));
     }).finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[50vh] bg-white dark:bg-gray-950">
-      <Loader className="animate-spin h-6 w-6 text-indigo-500" />
-    </div>
+    <Page>
+        <SkeletonBlock label="Loading admin dashboard">
+          <div className="space-y-8">
+            <Bar className="h-7 w-52" />
+            <StatCardsSkeleton />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card p-5">
+                  <Bar className="h-5 w-5 mb-3" />
+                  <Bar className="h-4 w-28 mb-2" />
+                  <Bar className="h-3 w-36 bg-gray-100 dark:bg-gray-800/60" />
+                </div>
+              ))}
+            </div>
+            <ListSkeleton rows={4} />
+          </div>
+        </SkeletonBlock>
+    </Page>
   );
 
   const statCards = [
-    { label: 'Total users',    value: stats?.totalUsers    ?? '—', icon: Users,      color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' },
-    { label: 'Total quizzes',  value: stats?.totalQuizzes  ?? '—', icon: BookOpen,   color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
-    { label: 'Total attempts', value: stats?.totalAttempts ?? '—', icon: Trophy,     color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
-    { label: 'Active users',   value: stats?.activeUsers   ?? '—', icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' },
+    { label: 'Total users',    value: stats?.totalUsers    ?? '—', icon: Users,      tone: 'brand' },
+    { label: 'Total quizzes',  value: stats?.totalQuizzes  ?? '—', icon: BookOpen,   tone: 'blue' },
+    { label: 'Total attempts', value: stats?.totalAttempts ?? '—', icon: Trophy,     tone: 'amber' },
+    { label: 'Active users',   value: stats?.activeUsers   ?? '—', icon: TrendingUp, tone: 'green' },
   ];
 
+  // Analytics, reports, users and reviews are platform-wide, so org admins don't get those tiles
   const actions = [
-    { label: 'Create quiz',     desc: 'Add a new quiz to the platform',      to: '/admin/quizzes/create', icon: Plus,         primary: true },
-    { label: 'Analytics',       desc: 'Charts, trends & performance data',   to: '/admin/analytics',      icon: BarChart2 },
-    { label: 'Reports',         desc: 'Export users & attempts as CSV',       to: '/admin/reports',        icon: Download },
+    { label: 'Create quiz',     desc: 'Add a new quiz',                      to: '/admin/quizzes/create', icon: Plus,         primary: true },
+    { label: 'Analytics',       desc: 'Charts, trends & performance data',   to: '/admin/analytics',      icon: BarChart2, platformOnly: true },
+    { label: 'Reports',         desc: 'Export users & attempts as CSV',       to: '/admin/reports',        icon: Download,  platformOnly: true },
     { label: 'Manage quizzes',  desc: 'Edit, publish, or delete quizzes',    to: '/admin/quizzes',        icon: BookOpen },
-    { label: 'Manage users',    desc: 'View and edit user accounts',         to: '/admin/users',          icon: Users },
+    { label: 'Manage users',    desc: 'View and edit user accounts',         to: '/admin/users',          icon: Users,     platformOnly: true },
     {
       label: 'Manage reviews',
       desc: 'Approve or remove testimonials',
       to: '/admin/reviews',
       icon: Star,
       badge: pending > 0 ? pending : null,
+      platformOnly: true,
     },
-  ];
+  ].filter(a => isAdmin || !a.platformOnly);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+    <Page className="space-y-8">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Platform overview</p>
-          </div>
-          <Link
-            to="/admin/quizzes/create"
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors"
-          >
-            <Plus className="h-4 w-4" /> New quiz
-          </Link>
-        </div>
+        <PageHeader
+          title="Admin"
+          description={isAdmin ? 'Platform overview' : 'Your organisation at a glance'}
+          actions={<Button to="/admin/quizzes/create" icon={Plus}>New quiz</Button>}
+        />
 
         {/* Pending reviews alert */}
         {pending > 0 && (
@@ -89,13 +102,7 @@ const AdminDashboard = () => {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map((s, i) => (
-            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${s.color}`}>
-                <s.icon className="h-4 w-4" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{s.value}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{s.label}</p>
-            </div>
+            <StatCard key={i} icon={s.icon} label={s.label} value={s.value} tone={s.tone} />
           ))}
         </div>
 
@@ -107,22 +114,22 @@ const AdminDashboard = () => {
               <Link
                 key={i}
                 to={a.to}
-                className={`relative flex items-center gap-3 p-4 rounded-xl border transition-colors group ${
+                className={`relative flex items-center gap-3 p-4 rounded-2xl border shadow-card transition-colors group ${
                   a.primary
-                    ? 'bg-indigo-600 border-indigo-600 hover:bg-indigo-700'
-                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700'
+                    ? 'bg-brand-600 border-brand-600 hover:bg-brand-700'
+                    : 'bg-white dark:bg-gray-900 border-gray-200/80 dark:border-gray-800 hover:border-brand-300 dark:hover:border-brand-700'
                 }`}
               >
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                   a.primary
-                    ? 'bg-indigo-500'
+                    ? 'bg-brand-500'
                     : 'bg-gray-100 dark:bg-gray-800'
                 }`}>
                   <a.icon className={`h-4 w-4 ${a.primary ? 'text-white' : 'text-gray-600 dark:text-gray-400'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`font-medium text-sm ${a.primary ? 'text-white' : 'text-gray-900 dark:text-white'}`}>{a.label}</p>
-                  <p className={`text-xs mt-0.5 truncate ${a.primary ? 'text-indigo-200' : 'text-gray-400 dark:text-gray-500'}`}>{a.desc}</p>
+                  <p className={`text-xs mt-0.5 truncate ${a.primary ? 'text-brand-200' : 'text-gray-400 dark:text-gray-500'}`}>{a.desc}</p>
                 </div>
                 {a.badge && (
                   <span className="absolute top-2 right-2 min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-amber-500 text-white text-xs font-bold rounded-full">
@@ -130,7 +137,7 @@ const AdminDashboard = () => {
                   </span>
                 )}
                 {!a.badge && (
-                  <ArrowRight className={`h-4 w-4 shrink-0 ${a.primary ? 'text-indigo-200' : 'text-gray-300 dark:text-gray-600'}`} />
+                  <ArrowRight className={`h-4 w-4 shrink-0 ${a.primary ? 'text-brand-200' : 'text-gray-300 dark:text-gray-600'}`} />
                 )}
               </Link>
             ))}
@@ -141,22 +148,30 @@ const AdminDashboard = () => {
         {recent.length > 0 && (
           <div>
             <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Recent activity</h2>
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-gray-800 text-xs text-gray-400 uppercase tracking-wide">
                     <th className="text-left px-5 py-3 font-medium">User</th>
+                    <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Quiz</th>
                     <th className="text-right px-5 py-3 font-medium">Score</th>
                     <th className="text-right px-5 py-3 font-medium hidden sm:table-cell">Date</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                   {recent.map((a, i) => (
-                    <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-5 py-3 text-gray-700 dark:text-gray-300">{a.user?.name || 'Unknown'}</td>
+                    <tr key={a._id || i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="px-5 py-3 text-gray-700 dark:text-gray-300">
+                        {a.user?.name || <span className="italic text-gray-400">Deleted user</span>}
+                      </td>
+                      <td className="px-5 py-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-[16rem] truncate">
+                        {a.quiz?.title || <span className="italic text-gray-400">Deleted quiz</span>}
+                      </td>
                       <td className="px-5 py-3 text-right">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          a.score >= 60
+                        <span title={a.quiz ? `Pass mark ${a.quiz.passScore}%` : undefined} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          a.passed === null || a.passed === undefined
+                            ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                            : a.passed
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                             : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                         }`}>
@@ -164,7 +179,7 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-right text-gray-400 hidden sm:table-cell">
-                        {new Date(a.createdAt).toLocaleDateString()}
+                        {new Date(a.completedAt || a.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}
@@ -174,8 +189,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-      </div>
-    </div>
+    </Page>
   );
 };
 

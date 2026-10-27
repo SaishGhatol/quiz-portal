@@ -2,8 +2,13 @@ const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/org.controller');
 const { authenticateJWT, isOrgAdmin } = require('../middleware/auth.middleware');
+const { objectIdParam } = require('../middleware/objectId.middleware');
 
 router.use(authenticateJWT);
+
+// Malformed ids answer 400 instead of reaching Mongoose
+router.param('id',        objectIdParam);
+router.param('studentId', objectIdParam);
 
 // ── Organisation ──────────────────────────────────────────────────────────
 router.post  ('/create',            ctrl.createOrg);
@@ -29,6 +34,7 @@ router.delete('/students/:studentId',   isOrgAdmin, ctrl.removeStudentFromOrg);
 // ── Assignments ───────────────────────────────────────────────────────────
 router.get   ('/assignments',      ctrl.getAssignments);          // org admins see all; students see own
 router.post  ('/assignments',      isOrgAdmin, ctrl.createAssignment);
+router.put   ('/assignments/:id',  isOrgAdmin, ctrl.updateAssignment);
 router.delete('/assignments/:id',  isOrgAdmin, ctrl.deleteAssignment);
 router.get   ('/my-assignments',   ctrl.getMyAssignments);
 

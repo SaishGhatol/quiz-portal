@@ -45,23 +45,28 @@ const PLANS = [
   },
 ];
 
-export const PricingSection = () => (
-  <section className="max-w-5xl mx-auto px-6 py-16">
-    <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 mb-2 tracking-wide uppercase text-center">Pricing</p>
-    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 text-center">Simple, transparent pricing</h2>
-    <p className="text-gray-500 dark:text-gray-400 text-center mb-10">No hidden fees. Cancel any time.</p>
+// `showHeading` is off on the Pricing page, which already has its own page title
+export const PricingSection = ({ showHeading = true }) => (
+  <section className={`max-w-5xl mx-auto px-6 ${showHeading ? 'py-16' : 'pb-4'}`}>
+    {showHeading && (
+      <>
+        <p className="text-sm font-medium text-brand-600 dark:text-brand-400 mb-2 tracking-wide uppercase text-center">Pricing</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 text-center">Simple, transparent pricing</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-center mb-10">No hidden fees. Cancel any time.</p>
+      </>
+    )}
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
       {PLANS.map(plan => (
         <div
           key={plan.name}
           className={`flex flex-col rounded-xl border p-6 ${
             plan.highlight
-              ? 'border-indigo-600 ring-2 ring-indigo-600/20 bg-white dark:bg-gray-900'
+              ? 'border-brand-600 ring-2 ring-brand-600/20 bg-white dark:bg-gray-900'
               : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900'
           }`}
         >
           {plan.badge && (
-            <span className="inline-block self-start px-2.5 py-0.5 text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full mb-3">
+            <span className="inline-block self-start px-2.5 py-0.5 text-xs font-semibold bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full mb-3">
               {plan.badge}
             </span>
           )}
@@ -80,7 +85,7 @@ export const PricingSection = () => (
           <ul className="space-y-2 flex-1 mb-6">
             {plan.limits.map(l => (
               <li key={l} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <Check className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                <Check className="h-4 w-4 text-brand-500 shrink-0 mt-0.5" />
                 {l}
               </li>
             ))}
@@ -89,7 +94,7 @@ export const PricingSection = () => (
             to={plan.to}
             className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
               plan.highlight
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                ? 'bg-brand-600 hover:bg-brand-700 text-white'
                 : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
             }`}
           >
@@ -113,11 +118,11 @@ const Pricing = () => (
         </h1>
         <p className="text-lg text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
           One platform for tuition centres, schools, and training teams.
-          Start free, scale when you're ready.
+          Start free, scale when you're ready. No hidden fees — cancel any time.
         </p>
       </div>
 
-      <PricingSection />
+      <PricingSection showHeading={false} />
 
       {/* FAQ strip */}
       <div className="mt-20 border-t border-gray-100 dark:border-gray-800 pt-16">

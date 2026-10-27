@@ -1,180 +1,258 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
-import { Loader, BookOpen, Clock, Calendar, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react';
+import { BookOpen, Clock, Calendar, RotateCcw, ArrowRight, ClipboardList, KeyRound, Compass, Lock, CalendarClock } from 'lucide-react';
+import { Page, PageHeader, Badge, DifficultyBadge, Tabs, Button, Card, EmptyState, ErrorState } from '../ui';
+import { SkeletonBlock, Bar } from '../Skeleton';
+import { categoryMeta, formatDate, scoreTone, TONE_TEXT } from '../../utils/quiz';
 
+// The server sends a status; fall back to working it out for older responses.
+// A finished assignment reads "Completed" even after its due date has passed.
+const SERVER_STATUS = { upcoming: 'upcoming', active: 'active', completed: 'done', expired: 'expired' };
 const statusOf = a => {
-  if (a.dueDate && new Date(a.dueDate) < new Date()) return 'expired';
+  if (SERVER_STATUS[a.status]) return SERVER_STATUS[a.status];
   if (a.startDate && new Date(a.startDate) > new Date()) return 'upcoming';
+  const pastDue = a.dueDate && new Date(a.dueDate) < new Date();
+  if (a.attemptsLeft === 0 || (pastDue && a.attemptsUsed > 0)) return 'done';
+  if (pastDue) return 'expired';
   return 'active';
 };
 
 const STATUS = {
-  active:   { label: 'Active',    cls: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' },
-  upcoming: { label: 'Upcoming',  cls: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' },
-  expired:  { label: 'Expired',   cls: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400' },
+  active:   { label: 'Active',    tone: 'green' },
+  upcoming: { label: 'Upcoming',  tone: 'blue' },
+  expired:  { label: 'Expired',   tone: 'gray' },
+  done:     { label: 'Completed', tone: 'brand' },
 };
 
-const DIFF = {
-  easy:   'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400',
-  medium: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400',
-  hard:   'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
+const FILTERS = [['all', 'All'], ['active', 'Active'], ['upcoming', 'Upcoming'], ['done', 'Completed'], ['expired', 'Expired']];
+
+const DAY = 86400000;
+const startOfDay = d => { const x = new Date(d); return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+
+// Calendar-day urgency for an open assignment's due date
+const dueInfo = due => {
+  const days = Math.round((startOfDay(due) - startOfDay(new Date())) / DAY);
+  if (days <= 0) return { label: 'Due today',    tone: 'red' };
+  if (days === 1) return { label: 'Due tomorrow', tone: 'amber' };
+  if (days <= 3) return { label: `Due in ${days} days`, tone: 'amber' };
+  return { label: `Due ${formatDate(due)}`, tone: null };
 };
+
+const Muted = ({ icon: Icon, children }) => (
+  <span className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto h-10 px-4 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+    {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}{children}
+  </span>
+);
+
+const AssignmentsSkeleton = () => (
+  <SkeletonBlock label="Loading assignments">
+    <Bar className="h-10 w-80 max-w-full rounded-xl mb-6" />
+    <div className="space-y-3">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 flex gap-4">
+          <Bar className="h-11 w-11 rounded-xl shrink-0" />
+          <div className="flex-1">
+            <div className="flex gap-2 mb-3"><Bar className="h-5 w-16 rounded-md" /><Bar className="h-5 w-14 rounded-md bg-gray-100 dark:bg-gray-800/60" /></div>
+            <Bar className="h-4 w-2/3 mb-2" />
+            <Bar className="h-3 w-1/2 bg-gray-100 dark:bg-gray-800/60" />
+          </div>
+          <Bar className="hidden sm:block h-10 w-24 rounded-lg shrink-0" />
+        </div>
+      ))}
+    </div>
+  </SkeletonBlock>
+);
 
 const MyAssignments = () => {
   const [assignments, setAssignments] = useState([]);
   const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
   const [filter,      setFilter]      = useState('all');
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     api.get('/org/my-assignments')
       .then(r => setAssignments(r.data.assignments || []))
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.message || 'We could not load your assignments.'))
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = assignments.filter(a => filter === 'all' || statusOf(a) === filter);
+  useEffect(() => { load(); }, [load]);
 
-  if (loading) return <div className="flex justify-center items-center min-h-[50vh] bg-white dark:bg-gray-950"><Loader className="animate-spin h-6 w-6 text-indigo-500" /></div>;
+  const withStatus = assignments.map(a => ({ a, status: statusOf(a) }));
+  const counts = withStatus.reduce((acc, { status }) => ({ ...acc, [status]: (acc[status] || 0) + 1 }), {});
+  const filtered = withStatus.filter(({ status }) => filter === 'all' || status === filter);
+
+  const header = (
+    <PageHeader
+      eyebrow="Organisation"
+      title="My assignments"
+      description="Quizzes assigned to you by your organisation."
+    />
+  );
+
+  if (loading) return <Page width="md">{header}<AssignmentsSkeleton /></Page>;
+
+  if (error) return (
+    <Page width="md">
+      {header}
+      <Card><ErrorState title="Couldn't load your assignments" message={error} onRetry={load} /></Card>
+    </Page>
+  );
+
+  if (assignments.length === 0) return (
+    <Page width="md">
+      {header}
+      <Card>
+        <EmptyState
+          icon={ClipboardList}
+          title="No assignments yet"
+          description="When your organisation assigns quizzes to your batch, they will appear here. Not part of an organisation yet? Join with the invite code your admin shared."
+          action={<>
+            <Button to="/org/join" icon={KeyRound}>Join with invite code</Button>
+            <Button to="/quizzes" variant="secondary" icon={Compass}>Explore quizzes</Button>
+          </>}
+        />
+      </Card>
+    </Page>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+    <Page width="md">
+      {header}
 
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Assignments</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Quizzes assigned to you by your organisation.
-          </p>
-        </div>
+      <Tabs
+        className="mb-6"
+        label="Filter assignments by status"
+        value={filter}
+        onChange={setFilter}
+        options={FILTERS.map(([value, label]) => ({ value, label, count: value === 'all' ? assignments.length : counts[value] || 0 }))}
+      />
 
-        {/* Filter tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-gray-800/60 p-1 rounded-lg w-fit">
-          {[['all', 'All'], ['active', 'Active'], ['upcoming', 'Upcoming'], ['expired', 'Expired']].map(([val, label]) => (
-            <button key={val} onClick={() => setFilter(val)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors
-                ${filter === val
-                  ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}>
-              {label}
-            </button>
-          ))}
-        </div>
+      {filtered.length === 0 ? (
+        <Card>
+          <EmptyState
+            compact
+            icon={BookOpen}
+            title={`No ${FILTERS.find(f => f[0] === filter)?.[1].toLowerCase()} assignments`}
+            description="Try a different filter."
+            action={<Button variant="secondary" size="sm" onClick={() => setFilter('all')}>Show all</Button>}
+          />
+        </Card>
+      ) : (
+        <ul className="space-y-3 animate-fade-up">
+          {filtered.map(({ a, status }) => {
+            const st      = STATUS[status];
+            const q       = a.quiz;
+            const canTake = status === 'active';
+            const due     = canTake && a.dueDate ? dueInfo(a.dueDate) : null;
+            const { icon: CatIcon, cls } = categoryMeta(q?.category);
 
-        {filtered.length === 0 ? (
-          <div className="text-center py-24 border border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
-            <BookOpen className="h-10 w-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
-            <p className="font-medium text-gray-700 dark:text-gray-300">
-              {filter === 'all' ? 'No assignments yet' : `No ${filter} assignments`}
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              {filter === 'all' ? 'Your organisation admin will assign quizzes to your batch.' : 'Try a different filter.'}
-            </p>
-            {filter !== 'all' && (
-              <button onClick={() => setFilter('all')} className="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Show all</button>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map((a, i) => {
-              const status = statusOf(a);
-              const st     = STATUS[status];
-              const q      = a.quiz;
-              const canTake = status === 'active';
+            return (
+              <li key={a._id}
+                className={`relative bg-white dark:bg-gray-900 border rounded-2xl shadow-card overflow-hidden transition-shadow ${
+                  canTake
+                    ? 'border-gray-200/80 dark:border-gray-800 hover:shadow-raised hover:border-brand-200 dark:hover:border-brand-500/40'
+                    : 'border-gray-200/80 dark:border-gray-800'
+                }`}>
+                {/* Batch colour accent */}
+                <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1"
+                  style={{ backgroundColor: a.batch?.color || 'var(--color-brand-500)' }} />
 
-              return (
-                <div key={a._id}
-                  className={`bg-white dark:bg-gray-900 border rounded-xl overflow-hidden transition-colors
-                    ${canTake ? 'border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-800' : 'border-gray-100 dark:border-gray-800 opacity-75'}`}>
-                  {/* Batch colour strip */}
-                  {a.batch?.color && <div className="h-1 w-full" style={{ backgroundColor: a.batch.color }} />}
+                <div className="p-4 sm:p-5 pl-5 sm:pl-6 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex gap-3.5 sm:gap-4 flex-1 min-w-0">
+                    <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${cls}`}>
+                      <CatIcon className="h-5 w-5" aria-hidden="true" />
+                    </span>
 
-                  <div className="p-5 flex flex-col sm:flex-row sm:items-start gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${st.cls}`}>{st.label}</span>
-                        {q?.difficulty && (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-lg capitalize ${DIFF[q.difficulty] || DIFF.medium}`}>
-                            {q.difficulty}
-                          </span>
-                        )}
-                        {a.batch && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{a.batch.name}</span>
-                        )}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                        <Badge tone={st.tone} dot>{st.label}</Badge>
+                        {q?.difficulty && <DifficultyBadge difficulty={q.difficulty} />}
+                        {due?.tone && <Badge tone={due.tone} icon={Clock}>{due.label}</Badge>}
                       </div>
 
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{q?.title || 'Unknown Quiz'}</h3>
-                      {q?.category && <p className="text-xs text-gray-400 mt-0.5">{q.category}</p>}
+                      <h3 className="font-semibold text-gray-900 dark:text-white leading-snug">{q?.title || 'Unknown quiz'}</h3>
 
-                      {/* Meta info */}
-                      <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-400 dark:text-gray-500">
-                        {q?.totalQuestions > 0 && (
-                          <span className="flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" />{q.totalQuestions} questions</span>
-                        )}
-                        {q?.timeLimit > 0 && (
-                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{q.timeLimit} min</span>
-                        )}
-                        {a.maxAttempts && (
-                          <span className="flex items-center gap-1">
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            Max {a.maxAttempts} attempt{a.maxAttempts !== 1 ? 's' : ''}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                        {a.batch && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.batch.color || 'var(--color-brand-500)' }} aria-hidden="true" />
+                            {a.batch.name}
                           </span>
                         )}
-                        {a.dueDate && (
-                          <span className={`flex items-center gap-1 ${status === 'expired' ? 'text-red-500 dark:text-red-400' : ''}`}>
-                            <Calendar className="h-3.5 w-3.5" />
-                            Due {new Date(a.dueDate).toLocaleDateString()}
+                        {a.batch && q?.category && <span aria-hidden="true">·</span>}
+                        {q?.category && <span>{q.category}</span>}
+                      </p>
+
+                      {/* Meta info */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-xs text-gray-500 dark:text-gray-400">
+                        {q?.totalQuestions > 0 && (
+                          <span className="inline-flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" aria-hidden="true" />{q.totalQuestions} questions</span>
+                        )}
+                        {q?.timeLimit > 0 && (
+                          <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{q.timeLimit} min</span>
+                        )}
+                        {a.maxAttempts && (
+                          <span className="inline-flex items-center gap-1">
+                            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                            {typeof a.attemptsLeft === 'number'
+                              ? `${a.attemptsLeft} of ${a.maxAttempts} attempt${a.maxAttempts !== 1 ? 's' : ''} left`
+                              : `Max ${a.maxAttempts} attempt${a.maxAttempts !== 1 ? 's' : ''}`}
+                          </span>
+                        )}
+                        {a.dueDate && !due?.tone && (
+                          <span className={`inline-flex items-center gap-1 ${status === 'expired' ? TONE_TEXT.red : ''}`}>
+                            <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                            {new Date(a.dueDate) < new Date() ? 'Closed' : 'Due'} {formatDate(a.dueDate)}
                           </span>
                         )}
                         {a.startDate && status === 'upcoming' && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            Opens {new Date(a.startDate).toLocaleDateString()}
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+                            Opens {formatDate(a.startDate)}
+                          </span>
+                        )}
+                        {typeof (a.bestScore ?? a.lastScore) === 'number' && (
+                          <span className={`font-semibold ${TONE_TEXT[scoreTone(a.bestScore ?? a.lastScore)] || ''}`}>
+                            Best score {a.bestScore ?? a.lastScore}%
+                            {a.attemptsUsed > 1 && typeof a.lastScore === 'number' && a.lastScore !== a.bestScore && (
+                              <span className="font-normal text-gray-500 dark:text-gray-400"> · last {a.lastScore}%</span>
+                            )}
                           </span>
                         )}
                       </div>
 
                       {a.instructions && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic border-l-2 border-gray-200 dark:border-gray-700 pl-2">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 border-l-2 border-gray-200 dark:border-gray-700 pl-3">
                           {a.instructions}
                         </p>
                       )}
                     </div>
+                  </div>
 
-                    {/* CTA */}
-                    <div className="shrink-0 flex items-center sm:pt-6">
-                      {canTake ? (
-                        <Link to={`/quiz/${q?._id}`}
-                          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors">
-                          Start <ArrowRight className="h-4 w-4" />
-                        </Link>
-                      ) : status === 'upcoming' ? (
-                        <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg">
-                          Not open yet
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg">
-                          Expired
-                        </span>
-                      )}
-                    </div>
+                  {/* CTA */}
+                  <div className="shrink-0 sm:pl-2">
+                    {canTake ? (
+                      <Button to={`/quiz/${q?._id}`} iconRight={ArrowRight} className="w-full sm:w-auto">
+                        {a.attemptsUsed > 0 ? 'Retake quiz' : 'Start quiz'}
+                      </Button>
+                    ) : status === 'upcoming' ? (
+                      <Muted icon={Lock}>Not open yet</Muted>
+                    ) : status === 'done' ? (
+                      <Muted>{a.attemptsLeft > 0 ? 'Closed' : 'No attempts left'}</Muted>
+                    ) : (
+                      <Muted>Expired</Muted>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {!loading && assignments.length === 0 && (
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-400">
-              Not part of an organisation yet?{' '}
-              <Link to="/org/join" className="text-indigo-600 dark:text-indigo-400 hover:underline">Join with an invite code</Link>
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Page>
   );
 };
 

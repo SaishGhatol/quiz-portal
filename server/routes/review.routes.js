@@ -3,6 +3,9 @@ const router   = express.Router();
 const Review   = require('../models/review.model');
 const User     = require('../models/user.model');
 const { authenticateJWT, isAdmin } = require('../middleware/auth.middleware');
+const { objectIdParam } = require('../middleware/objectId.middleware');
+
+router.param('id', objectIdParam);
 
 // GET /api/reviews — public; returns approved reviews (max 6)
 router.get('/', async (req, res) => {
@@ -20,21 +23,24 @@ router.get('/', async (req, res) => {
 // POST /api/reviews — authenticated users submit a review
 router.post('/', authenticateJWT, async (req, res) => {
   try {
-    const { role, quote, rating } = req.body;
-    if (!quote || !role) return res.status(400).json({ message: 'role and quote are required' });
+    const role  = typeof req.body.role  === 'string' ? req.body.role.trim()  : '';
+    const quote = typeof req.body.quote === 'string' ? req.body.quote.trim() : '';
+    const rating = Math.round(Number(req.body.rating) || 5);
+    if (!quote || !role) return res.status(400).json({ message: 'Your role and review are required' });
+    if (role.length > 80) return res.status(400).json({ message: 'Role must be 80 characters or fewer' });
+    if (quote.length < 10 || quote.length > 600) return res.status(400).json({ message: 'Reviews must be between 10 and 600 characters' });
+    if (rating < 1 || rating > 5) return res.status(400).json({ message: 'Rating must be between 1 and 5' });
 
     const user = await User.findById(req.userId).select('name');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const review = await Review.create({
-      userId: req.userId,
-      name:   user.name,
-      role,
-      quote,
-      rating: rating || 5,
-      approved: false,
-    });
-    res.status(201).json(review);
+    // One review per person: resubmitting replaces it and sends it back for approval
+    const review = await Review.findOneAndUpdate(
+      { userId: req.userId },
+      { userId: req.userId, name: user.name, role, quote, rating, approved: false },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    res.status(201).json({ review, message: 'Thanks! Your review will appear once an admin approves it.' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

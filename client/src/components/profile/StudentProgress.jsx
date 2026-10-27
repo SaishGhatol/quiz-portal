@@ -1,53 +1,114 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { Loader, TrendingUp, Trophy, Clock, Target, ArrowRight, BarChart2, BookOpen } from 'lucide-react';
+import { TrendingUp, Trophy, Target, BarChart3, Flame, Compass, ArrowRight, ChevronRight, LineChart, Crosshair } from 'lucide-react';
+import Achievements from '../dashboard/Achievements';
+import { computeAchievements } from '../../utils/achievements';
+import { Page, PageHeader, Card, CardHeader, StatCard, ProgressBar, Button, EmptyState, ErrorState } from '../ui';
+import { SkeletonBlock, StatCardsSkeleton, ListSkeleton, Bar } from '../Skeleton';
+import { percent, passedAttempt, scoreTone, TONE_TEXT, categoryMeta, computeStreak, formatDate, formatRelative, DEFAULT_PASS } from '../../utils/quiz';
 
-/* Simple SVG sparkline (no Chart.js dependency needed) */
-const Sparkline = ({ values, color = '#4f46e5', height = 48 }) => {
-  if (!values || values.length < 2) return null;
-  const max = Math.max(...values, 1);
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * 200;
-    const y = height - (v / max) * height;
-    return `${x},${y}`;
-  });
+const PILL = {
+  green: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400',
+  amber: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
+  red:   'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400',
+};
+
+const Y_TICKS = [100, 50, 0];
+
+/*
+ * Dependency-free score chart. The SVG stretches to the container (non-scaling
+ * strokes keep lines crisp); labels and points are HTML so text never distorts.
+ */
+const ScoreChart = ({ values, dates }) => {
+  const n = values.length;
+  const x = i => (n === 1 ? 50 : (i / (n - 1)) * 100);
+  const y = v => 100 - Math.max(0, Math.min(100, v));
+  const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ');
+  const area = `${line} L${x(n - 1)},100 L${x(0)},100 Z`;
+  const showDots = n <= 30;
+  const avg = Math.round(values.reduce((s, v) => s + v, 0) / n);
+
   return (
-    <svg viewBox={`0 0 200 ${height}`} className="w-full" preserveAspectRatio="none" style={{ height }}>
-      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Fill area */}
-      <polygon
-        points={`0,${height} ${pts.join(' ')} 200,${height}`}
-        fill={color} fillOpacity="0.08" />
-    </svg>
+    <div>
+      <div className="relative h-48 sm:h-56 pl-9"
+        role="img"
+        aria-label={`Score over time across ${n} attempts: first ${values[0]}%, latest ${values[n - 1]}%, average ${avg}%. Pass mark ${DEFAULT_PASS}%.`}>
+        {/* Y axis labels */}
+        {Y_TICKS.map(t => (
+          <span key={t} aria-hidden="true"
+            className="absolute left-0 w-7 text-right text-[11px] tabular-nums text-gray-400 dark:text-gray-500 -translate-y-1/2"
+            style={{ top: `${y(t)}%` }}>
+            {t}
+          </span>
+        ))}
+
+        <div className="relative h-full" aria-hidden="true">
+          {/* Grid lines */}
+          {Y_TICKS.map(t => (
+            <div key={t} className="absolute inset-x-0 border-t border-gray-100 dark:border-gray-800" style={{ top: `${y(t)}%` }} />
+          ))}
+
+          {/* Pass line */}
+          <div className="absolute inset-x-0 border-t border-dashed border-emerald-500/60" style={{ top: `${y(DEFAULT_PASS)}%` }}>
+            <span className="absolute right-0 top-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 bg-white/80 dark:bg-gray-900/80 px-1 rounded">
+              Pass {DEFAULT_PASS}%
+            </span>
+          </div>
+
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full overflow-visible text-brand-500 dark:text-brand-400">
+            <path d={area} fill="currentColor" fillOpacity="0.1" />
+            <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+
+          {values.map((v, i) => (showDots || i === n - 1) && (
+            <span key={i} title={`${v}% · ${formatDate(dates[i])}`}
+              className={`absolute rounded-full -translate-x-1/2 -translate-y-1/2 ring-2 ring-white dark:ring-gray-900 ${
+                i === n - 1 ? 'w-3 h-3 bg-brand-600 dark:bg-brand-400' : 'w-2 h-2 bg-brand-500 dark:bg-brand-400'
+              }`}
+              style={{ left: `${x(i)}%`, top: `${y(v)}%` }} />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-between pl-9 mt-2 text-[11px] text-gray-400 dark:text-gray-500 tabular-nums">
+        <span>{formatDate(dates[0])}</span>
+        <span>{formatDate(dates[n - 1])}</span>
+      </div>
+    </div>
   );
 };
 
 const StudentProgress = () => {
   const [attempts, setAttempts] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     api.get('/quizzes/my-attempts')
       .then(r => setAttempts(r.data.attempts || []))
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.message || 'We could not load your progress.'))
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => { load(); }, [load]);
+
   const done = attempts.filter(a => a.completedAt).sort((a, b) => new Date(a.completedAt) - new Date(b.completedAt));
 
-  const pct  = a => a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0;
-  const scores = done.map(pct);
-  const avg  = scores.length ? Math.round(scores.reduce((s, x) => s + x, 0) / scores.length) : 0;
-  const best = scores.length ? Math.max(...scores) : 0;
-  const pass = done.filter(a => pct(a) >= 40).length;
+  const scores = done.map(percent);
+  const avg    = scores.length ? Math.round(scores.reduce((s, x) => s + x, 0) / scores.length) : 0;
+  const best   = scores.length ? Math.max(...scores) : 0;
+  const pass   = done.filter(passedAttempt).length;
+  const streak = computeStreak(attempts);
 
   // Attempts per category
   const byCategory = done.reduce((acc, a) => {
     const cat = a.quiz?.category || 'Uncategorised';
     acc[cat] = acc[cat] || { name: cat, count: 0, totalPct: 0 };
     acc[cat].count++;
-    acc[cat].totalPct += pct(a);
+    acc[cat].totalPct += percent(a);
     return acc;
   }, {});
 
@@ -55,117 +116,186 @@ const StudentProgress = () => {
     .map(c => ({ ...c, avg: Math.round(c.totalPct / c.count) }))
     .sort((a, b) => b.count - a.count);
 
-  if (loading) return <div className="flex justify-center items-center min-h-[50vh] bg-white dark:bg-gray-950"><Loader className="animate-spin h-6 w-6 text-indigo-500" /></div>;
+  // Lowest average wins; ties go to the category with more attempts (more signal)
+  const weakest = categories
+    .filter(c => c.name !== 'Uncategorised')
+    .reduce((w, c) => (!w || c.avg < w.avg || (c.avg === w.avg && c.count > w.count) ? c : w), null);
+
+  const header = (
+    <PageHeader
+      eyebrow="Insights"
+      title="Progress report"
+      description="How your scores are trending and where to focus next."
+      actions={done.length > 0 && <Button to="/my-attempts" variant="secondary">All attempts</Button>}
+    />
+  );
+
+  if (loading) return (
+    <Page>
+      {header}
+      <SkeletonBlock label="Loading progress">
+        <div className="space-y-6">
+          <StatCardsSkeleton count={4} />
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6">
+            <Bar className="h-4 w-32 mb-6" />
+            <Bar className="h-48 w-full bg-gray-100 dark:bg-gray-800/60" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ListSkeleton rows={4} />
+            <ListSkeleton rows={4} />
+          </div>
+        </div>
+      </SkeletonBlock>
+    </Page>
+  );
+
+  if (error) return (
+    <Page>
+      {header}
+      <Card><ErrorState title="Couldn't load your progress" message={error} onRetry={load} /></Card>
+    </Page>
+  );
+
+  if (done.length === 0) return (
+    <Page>
+      {header}
+      <Card>
+        <EmptyState
+          icon={TrendingUp}
+          title="Your progress starts with one quiz"
+          description="Complete a quiz to see score trends, category strengths and a suggestion for what to practise next."
+          action={<Button to="/quizzes" icon={Compass}>Explore quizzes</Button>}
+        />
+      </Card>
+    </Page>
+  );
+
+  const latest = scores[scores.length - 1];
+  const prev   = scores.length >= 2 ? scores[scores.length - 2] : null;
+  const delta  = prev == null ? null : latest - prev;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+    <Page>
+      {header}
 
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Progress</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Your quiz performance over time.</p>
+      <div className="space-y-6 animate-fade-up">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <StatCard icon={BarChart3} label="Average score" value={`${avg}%`} hint={`${pass} of ${done.length} passed`} tone="brand" />
+          <StatCard icon={Trophy}    label="Best score"    value={`${best}%`} tone="amber" />
+          <StatCard icon={Target}    label="Quizzes done"  value={done.length} tone="green" />
+          <StatCard icon={Flame}     label="Current streak" value={`${streak} day${streak === 1 ? '' : 's'}`}
+            hint={streak > 0 ? 'Keep it going today' : 'Take a quiz to start one'} tone="red" />
         </div>
 
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: 'Quizzes done', value: done.length,          icon: BookOpen },
-            { label: 'Avg score',    value: `${avg}%`,            icon: BarChart2 },
-            { label: 'Best score',   value: `${best}%`,           icon: Trophy },
-            { label: 'Passed',       value: `${pass}/${done.length}`, icon: Target },
-          ].map((s, i) => (
-            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
-              <s.icon className="h-5 w-5 text-indigo-500 mb-3" />
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{s.value}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{s.label}</p>
+        {/* Focus next */}
+        {weakest && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-brand-100 dark:border-brand-500/20 bg-brand-50/60 dark:bg-brand-500/[0.07] p-4 sm:p-5">
+            <span className="w-10 h-10 rounded-xl bg-white dark:bg-gray-900 border border-brand-100 dark:border-brand-500/20 flex items-center justify-center shrink-0">
+              <Crosshair className="h-5 w-5 text-brand-600 dark:text-brand-400" aria-hidden="true" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Focus next: {weakest.name}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+                {categories.filter(c => c.name !== 'Uncategorised').length > 1
+                  ? <>Your average here is <span className={`font-semibold ${TONE_TEXT[scoreTone(weakest.avg)]}`}>{weakest.avg}%</span>, your lowest category.</>
+                  : <>You average <span className={`font-semibold ${TONE_TEXT[scoreTone(weakest.avg)]}`}>{weakest.avg}%</span> here. Try another category to compare.</>}
+              </p>
             </div>
-          ))}
-        </div>
-
-        {/* Score trend */}
-        {scores.length >= 2 && (
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-gray-900 dark:text-white">Score trend</h2>
-              <span className="text-xs text-gray-400">{scores.length} attempts</span>
-            </div>
-            <Sparkline values={scores} color="#4f46e5" height={60} />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>{new Date(done[0]?.completedAt).toLocaleDateString()}</span>
-              <span>{new Date(done[done.length-1]?.completedAt).toLocaleDateString()}</span>
-            </div>
+            <Button to={`/quizzes?category=${encodeURIComponent(weakest.name)}`} iconRight={ArrowRight} className="w-full sm:w-auto">
+              Practise {weakest.name}
+            </Button>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Category breakdown */}
-          {categories.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
-              <h2 className="font-bold text-gray-900 dark:text-white mb-4">By category</h2>
-              <div className="space-y-3">
-                {categories.map(c => (
-                  <div key={c.name}>
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{c.name}</span>
-                      <span className="text-gray-400 dark:text-gray-500 shrink-0 ml-2">{c.count} quiz{c.count !== 1 ? 'zes' : ''} · {c.avg}% avg</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-2 rounded-full bg-indigo-500 transition-all"
-                        style={{ width: `${Math.min(c.avg, 100)}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Recent quiz results */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-              <h2 className="font-bold text-gray-900 dark:text-white">Recent results</h2>
-              <Link to="/my-attempts" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">See all</Link>
-            </div>
-            {done.length === 0 ? (
-              <div className="py-12 text-center text-sm text-gray-400">No completed quizzes yet.</div>
+        {/* Score over time */}
+        <Card padding={false}>
+          <CardHeader
+            icon={LineChart}
+            title="Score over time"
+            subtitle={`${scores.length} attempt${scores.length === 1 ? '' : 's'}`}
+            action={delta != null && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                Latest <span className={`font-semibold ${TONE_TEXT[scoreTone(latest)]}`}>{latest}%</span>
+                <span className={`ml-1.5 font-medium ${delta > 0 ? 'text-emerald-600 dark:text-emerald-400' : delta < 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+                  {delta > 0 ? `+${delta}` : delta}
+                </span>
+              </span>
+            )}
+          />
+          <div className="p-5 sm:p-6">
+            {scores.length >= 2 ? (
+              <ScoreChart values={scores} dates={done.map(a => a.completedAt)} />
             ) : (
-              <div className="divide-y divide-gray-50 dark:divide-gray-800">
-                {[...done].reverse().slice(0, 6).map((a, i) => {
-                  const score = pct(a);
-                  return (
-                    <Link key={i} to={`/attempts/${a._id}`}
-                      className="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0
-                        ${score >= 70 ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                          : score >= 40 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
-                          : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
-                        {score}%
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.quiz?.title || 'Quiz'}</p>
-                        <p className="text-xs text-gray-400">{new Date(a.completedAt).toLocaleDateString()}</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-400 transition-colors shrink-0" />
-                    </Link>
-                  );
-                })}
-              </div>
+              <p className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                Complete one more quiz to see your trend line.
+              </p>
             )}
           </div>
-        </div>
+        </Card>
 
-        {done.length === 0 && (
-          <div className="text-center py-12">
-            <TrendingUp className="h-10 w-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
-            <p className="font-medium text-gray-700 dark:text-gray-300">Start taking quizzes to see your progress</p>
-            <Link to="/quizzes" className="mt-3 inline-block px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
-              Browse quizzes
-            </Link>
-          </div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Category performance */}
+          <Card padding={false}>
+            <CardHeader title="By category" subtitle="Average score per subject" />
+            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+              {categories.map(c => {
+                const tone = scoreTone(c.avg);
+                const { icon: CatIcon, cls } = categoryMeta(c.name);
+                return (
+                  <li key={c.name} className="flex items-center gap-3 px-5 sm:px-6 py-3.5">
+                    <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${cls}`}>
+                      <CatIcon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.name}</span>
+                        <span className={`text-sm font-semibold tabular-nums shrink-0 ${TONE_TEXT[tone]}`}>{c.avg}%</span>
+                      </div>
+                      <ProgressBar value={c.avg} tone={tone} size="sm" label={`${c.name} average ${c.avg}%`} />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                        {c.count} quiz{c.count !== 1 ? 'zes' : ''}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+
+          {/* Recent results */}
+          <Card padding={false}>
+            <CardHeader
+              title="Recent results"
+              action={<Link to="/my-attempts" className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">See all</Link>}
+            />
+            <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+              {[...done].reverse().slice(0, 6).map(a => {
+                const score = percent(a);
+                return (
+                  <li key={a._id}>
+                    <Link to={`/attempts/${a._id}`}
+                      className="group flex items-center gap-3 px-5 sm:px-6 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500">
+                      <span className={`min-w-[3.25rem] text-center px-2 py-1 rounded-lg text-sm font-bold tabular-nums shrink-0 ${PILL[scoreTone(score)]}`}>
+                        {score}%
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.quiz?.title || 'Quiz'}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{formatRelative(a.completedAt)}</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 shrink-0" aria-hidden="true" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        </div>
       </div>
-    </div>
+
+      <section id="achievements" className="mt-6 scroll-mt-24">
+        <Achievements achievements={computeAchievements(done)} />
+      </section>
+    </Page>
   );
 };
 

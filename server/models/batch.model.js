@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
+const crypto   = require('crypto');
 
-// Generate a random 6-char alphanumeric join code
-const makeCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+// Random 8-char join code without look-alike characters (no 0/O, 1/I)
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const makeCode = () => Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
 
 const batchSchema = new mongoose.Schema({
   name:         { type: String, required: true, trim: true },
@@ -11,7 +13,7 @@ const batchSchema = new mongoose.Schema({
   organization: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
   createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   students:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  // 6-char code students use to join this batch
+  // Code students could use to join this batch
   joinCode:     { type: String, unique: true, default: makeCode },
   isActive:     { type: Boolean, default: true },
   // Visual colour tag for the UI

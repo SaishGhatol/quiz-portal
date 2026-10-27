@@ -41,8 +41,11 @@ export const AuthProvider = ({ children }) => {
         try {
           const res = await api.get('/auth/me');
           setCurrentUser(res.data.user);
-        } catch {
-          applyToken(null);
+        } catch (err) {
+          // Only a rejected token should sign the user out — a rate limit or
+          // network blip must not throw away a valid session
+          const status = err.response?.status;
+          if (status === 401 || status === 403) applyToken(null);
           setCurrentUser(null);
         }
       }
@@ -90,8 +93,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const changePassword = async (userId, passwordData) => {
-    await api.put(`/users/${userId}/password`, passwordData);
+    const res = await api.put(`/users/${userId}/password`, passwordData);
+    // The server signs out older sessions on a password change and returns a new token for this one
+    if (res.data?.token) applyToken(res.data.token);
     return true;
+  };
+
+  const deleteAccount = async () => {
+    await api.delete('/users/me');
+    logout();
   };
 
   // ── Computed ─────────────────────────────────────────────────────────────────
@@ -110,6 +120,7 @@ export const AuthProvider = ({ children }) => {
     applyNewToken,
     updateProfile,
     changePassword,
+    deleteAccount,
     isAdmin,
     isOrgAdmin,
   };
