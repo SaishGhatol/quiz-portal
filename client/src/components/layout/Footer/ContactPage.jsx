@@ -1,21 +1,30 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Mail, Phone, MapPin, Send, Loader } from 'lucide-react';
+import api from '../../../utils/api';
+import { ArrowLeft, Mail, Send, Loader } from 'lucide-react';
 
 const ContactPage = () => {
-    const [formStatus, setFormStatus] = useState('');
     const [loading, setLoading] = useState(false);
-    
-    const handleSubmit = (e) => {
+
+    const handleSubmit = async (e) => {
       e.preventDefault();
       setLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setLoading(false);
+      const form = e.target;
+      try {
+        await api.post('/contact', {
+          name: form.name.value,
+          email: form.email.value,
+          subject: form.subject.value,
+          message: form.message.value,
+        });
         toast.success('Your message has been sent. We will get back to you soon!', { theme: 'dark' });
-        e.target.reset();
-      }, 1500);
+        form.reset();
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Could not send your message. Please try again.', { theme: 'dark' });
+      } finally {
+        setLoading(false);
+      }
     };
     
     return (
@@ -26,7 +35,7 @@ const ContactPage = () => {
         `}</style>
         <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
           <header className="mb-8">
-            <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-900 dark:text-white transition-colors">
+            <Link to="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
               <ArrowLeft size={16} />
               Back to Home
             </Link>
@@ -50,21 +59,8 @@ const ContactPage = () => {
                     <Mail size={20} className="text-gray-500 dark:text-gray-400 mt-1 flex-shrink-0" />
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white">Email</h3>
-                      <a href="mailto:saishghatol100@gmail.com" className="text-gray-400 hover:text-gray-900 dark:text-white transition-colors">saishghatol100@gmail.com</a>
-                    </div>
-                  </div>
-                   <div className="flex items-start gap-4">
-                    <Phone size={20} className="text-gray-500 dark:text-gray-400 mt-1 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Phone</h3>
-                      <a href="tel:+911234567890" className="text-gray-400 hover:text-gray-900 dark:text-white transition-colors">+(91) 123-4567</a>
-                    </div>
-                  </div>
-                   <div className="flex items-start gap-4">
-                    <MapPin size={20} className="text-gray-500 dark:text-gray-400 mt-1 flex-shrink-0" />
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">Office</h3>
-                      <p className="text-gray-400">123 Quiz Street, Knowledge City, India</p>
+                      <a href="mailto:saishghatol100@gmail.com" className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">saishghatol100@gmail.com</a>
+                      <p className="text-xs text-gray-400 mt-1">We typically reply within one business day.</p>
                     </div>
                   </div>
                 </div>
@@ -74,29 +70,29 @@ const ContactPage = () => {
               <div className="p-8 md:p-10">
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="relative">
-                    <input type="text" id="name" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent focus:outline-none focus:ring-1 focus:ring-gray-500" placeholder="Full Name" />
+                    <input type="text" id="name" name="name" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500" placeholder="Full Name" />
                     <label htmlFor="name" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-50 dark:bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 dark:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Full Name</label>
                   </div>
-                  
+
                    <div className="relative">
-                    <input type="email" id="email" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent" placeholder="Email Address" />
+                    <input type="email" id="email" name="email" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500" placeholder="Email Address" />
                     <label htmlFor="email" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-50 dark:bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 dark:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Email Address</label>
                   </div>
 
                    <div className="relative">
-                    <input type="text" id="subject" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent" placeholder="Subject" />
+                    <input type="text" id="subject" name="subject" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500" placeholder="Subject" />
                     <label htmlFor="subject" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-50 dark:bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 dark:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Subject</label>
                   </div>
-                  
+
                   <div className="relative">
-                    <textarea id="message" rows="4" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent" placeholder="Your Message"></textarea>
+                    <textarea id="message" name="message" rows="4" required className="peer w-full px-4 py-3 bg-transparent border border-gray-300 dark:border-gray-700 rounded-lg placeholder-transparent focus:outline-none focus:ring-1 focus:ring-brand-500" placeholder="Your Message"></textarea>
                     <label htmlFor="message" className="absolute left-4 -top-2.5 text-xs text-gray-400 bg-gray-50 dark:bg-gray-950 px-1 transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500 dark:text-gray-400 peer-placeholder-shown:top-3.5 peer-focus:-top-2.5 peer-focus:text-xs">Your Message</label>
                   </div>
-                  
+
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full flex justify-center items-center py-3 px-4 text-sm font-semibold rounded-lg text-black bg-white hover:bg-gray-200 transition disabled:opacity-50"
+                    className="w-full flex justify-center items-center py-3 px-4 text-sm font-semibold rounded-lg text-white bg-brand-600 hover:bg-brand-700 transition-colors disabled:opacity-50"
                   >
                     {loading ? (
                         <><Loader className="animate-spin h-5 w-5 mr-2" /> Sending...</>

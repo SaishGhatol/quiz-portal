@@ -1,8 +1,11 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import AuthContext from '../../contexts/AuthContext';
 import api from '../../utils/api';
-import { User, Lock, Star, AlertTriangle, Save, Eye, EyeOff, Loader, Camera } from 'lucide-react';
+import { PasswordToggle } from '../auth/AuthLayout';
+import { Page, PageHeader, Card, CardHeader, Input, inputClass, Button, Avatar, Badge, Modal, Spinner } from '../ui';
+import { User, Lock, Star, AlertTriangle, Save, Camera, Trash2, KeyRound, Send } from 'lucide-react';
 
 const TABS = [
   { key: 'profile',  label: 'Profile',     icon: User },
@@ -11,10 +14,43 @@ const TABS = [
   { key: 'danger',   label: 'Danger Zone', icon: AlertTriangle },
 ];
 
-const inputCls = 'w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+const PW_FIELDS = [
+  { field: 'currentPassword', label: 'Current password',     auto: 'current-password' },
+  { field: 'newPassword',     label: 'New password',         auto: 'new-password', hint: 'At least 6 characters.' },
+  { field: 'confirmPassword', label: 'Confirm new password', auto: 'new-password' },
+];
+
+const RATING_LABELS = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
+
+const ROLE_LABELS = { user: 'Student', admin: 'Administrator', org_admin: 'Institute admin', teacher: 'Teacher' };
+const roleLabel = r => ROLE_LABELS[r] || (r || '').replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+
+// Footer row shared by the form cards
+const CardFooter = ({ children }) => (
+  <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/60 flex justify-end">
+    {children}
+  </div>
+);
+
+// Crops to a centred square and shrinks to 256px JPEG, so the photo is small enough to store on the profile
+const toAvatarDataUrl = file => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+    const side = Math.min(img.width, img.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    canvas.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+    URL.revokeObjectURL(img.src);
+    resolve(canvas.toDataURL('image/jpeg', 0.85));
+  };
+  img.onerror = () => reject(new Error('Could not read that image'));
+  img.src = URL.createObjectURL(file);
+});
 
 const Profile = () => {
-  const { currentUser, updateProfile, changePassword } = useContext(AuthContext);
+  const { currentUser, updateProfile, changePassword, deleteAccount } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const fileRef  = useRef(null);
 
   const [tab,     setTab]     = useState('profile');
   const [loading, setLoading] = useState({});
@@ -22,6 +58,7 @@ const Profile = () => {
 
   const [name,    setName]    = useState('');
   const [pwData,  setPwData]  = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwTried, setPwTried] = useState(false);
   const [review,  setReview]  = useState({ rating: 0, role: '', content: '' });
   const [preview, setPreview] = useState(null);
   const [imgFile, setImgFile] = useState(null);
@@ -45,6 +82,7 @@ const Profile = () => {
 
   const handlePasswordSave = async e => {
     e.preventDefault();
+    setPwTried(true);
     if (pwData.newPassword !== pwData.confirmPassword) return toast.error("Passwords don't match");
     if (pwData.newPassword.length < 6) return toast.error('Password must be at least 6 characters');
     load('password');
@@ -52,6 +90,7 @@ const Profile = () => {
       await changePassword(currentUser.id, pwData);
       toast.success('Password updated');
       setPwData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPwTried(false);
     } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
     finally { done('password'); }
   };
@@ -62,8 +101,8 @@ const Profile = () => {
     if (!review.role.trim()) return toast.error('Please enter your role');
     load('review');
     try {
-      await api.post('/reviews', { role: review.role.trim(), quote: review.content, rating: review.rating });
-      toast.success('Thanks! Your review is now live on the homepage.');
+      const { data } = await api.post('/reviews', { role: review.role.trim(), quote: review.content, rating: review.rating });
+      toast.success(data?.message || 'Thanks! Your review will appear once an admin approves it.');
       setReview({ rating: 0, role: '', content: '' });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to submit review');
@@ -76,237 +115,255 @@ const Profile = () => {
     const f = e.target.files[0];
     if (!f) return;
     if (!f.type.startsWith('image/')) return toast.error('Select a valid image');
-    if (f.size > 2 * 1024 * 1024) return toast.error('Image max 2 MB');
+    if (f.size > 8 * 1024 * 1024) return toast.error('Image max 8 MB');
     setImgFile(f);
     setPreview(URL.createObjectURL(f));
+  };
+
+  const cancelImage = () => {
+    setPreview(null); setImgFile(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleDeleteAccount = async () => {
+    load('delete');
+    try {
+      await deleteAccount();
+      toast.success('Your account has been deleted.');
+      navigate('/');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete account');
+      done('delete');
+    }
   };
 
   const handleImageUpload = async () => {
     if (!imgFile) return;
     load('avatar');
-    const fd = new FormData();
-    fd.append('profilePicture', imgFile);
     try {
-      await api.put(`/users/${currentUser.id}/avatar`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await updateProfile(currentUser.id, { profilePicture: await toAvatarDataUrl(imgFile) });
       toast.success('Profile picture updated');
-      setImgFile(null); setPreview(null);
-    } catch { toast.error('Upload failed'); }
+      cancelImage();
+    } catch (err) { toast.error(err.response?.data?.message || 'Upload failed'); }
     finally { done('avatar'); }
   };
 
-  if (!currentUser) return <div className="flex justify-center items-center min-h-[50vh]"><Loader className="animate-spin h-6 w-6 text-indigo-500" /></div>;
+  const handleImageRemove = async () => {
+    load('avatar');
+    try {
+      await updateProfile(currentUser.id, { profilePicture: '' });
+      toast.success('Profile picture removed');
+    } catch (err) { toast.error(err.response?.data?.message || 'Could not remove photo'); }
+    finally { done('avatar'); }
+  };
 
-  const PwField = ({ field, label }) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-      <div className="relative">
-        <input type={showPw[field] ? 'text' : 'password'} required value={pwData[field]}
-          onChange={e => setPwData(p => ({ ...p, [field]: e.target.value }))}
-          className={`${inputCls} pr-10`} />
-        <button type="button" onClick={() => setShowPw(p => ({ ...p, [field]: !p[field] }))}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-          {showPw[field] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </div>
-  );
+  if (!currentUser) return <Page width="md"><Spinner label="Loading your account" /></Page>;
+
+  // Inline password errors, shown after the first submit attempt (the toasts remain)
+  const pwErrors = {
+    newPassword: pwTried && pwData.newPassword.length < 6 ? 'Password must be at least 6 characters' : undefined,
+    confirmPassword: pwData.confirmPassword && pwData.newPassword !== pwData.confirmPassword && (pwTried || pwData.confirmPassword.length >= pwData.newPassword.length)
+      ? "Passwords don't match" : undefined,
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+    <Page width="md">
+      <PageHeader eyebrow="Account" title="Account settings" description="Manage your profile, password and feedback." />
 
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Account Settings</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage your profile and security preferences.</p>
-        </div>
+      <div className="flex flex-col md:flex-row gap-6">
 
-        <div className="flex flex-col md:flex-row gap-6">
-
-          {/* Sidebar tabs */}
-          <aside className="md:w-48 shrink-0">
-            <nav className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-2 space-y-0.5">
-              {TABS.map(t => (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left
-                    ${tab === t.key
-                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                      : `text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 ${t.key === 'danger' ? 'hover:text-red-600 dark:hover:text-red-400' : 'hover:text-gray-900 dark:hover:text-white'}`}`}>
-                  <t.icon className="h-4 w-4 shrink-0" />
+        {/* Section nav: horizontal strip on mobile, sidebar from md */}
+        <aside className="md:w-56 shrink-0">
+          <div className="hidden md:flex items-center gap-3 mb-4 px-1">
+            <Avatar name={currentUser.name} src={currentUser.profilePicture} size="md" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{currentUser.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser.email}</p>
+            </div>
+          </div>
+          <nav role="tablist" aria-label="Account sections"
+            className="flex md:flex-col gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:p-1.5 md:bg-white md:dark:bg-gray-900 md:border md:border-gray-200/80 md:dark:border-gray-800 md:rounded-2xl md:shadow-card">
+            {TABS.map(t => {
+              const active = tab === t.key;
+              const danger = t.key === 'danger';
+              return (
+                <button key={t.key} type="button" role="tab" id={`tab-${t.key}`} aria-selected={active} aria-controls={`panel-${t.key}`}
+                  onClick={() => setTab(t.key)}
+                  className={`shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-left whitespace-nowrap border md:border-0
+                    ${active
+                      ? danger
+                        ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20'
+                        : 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-200 dark:border-brand-500/20'
+                      : `bg-white dark:bg-gray-900 md:bg-transparent md:dark:bg-transparent border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 ${danger ? 'hover:text-red-600 dark:hover:text-red-400' : 'hover:text-gray-900 dark:hover:text-white'}`}`}>
+                  <t.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {t.label}
                 </button>
-              ))}
-            </nav>
-          </aside>
+              );
+            })}
+          </nav>
+        </aside>
 
-          {/* Content */}
-          <div className="flex-1 min-w-0">
+        {/* Content */}
+        <div className="flex-1 min-w-0" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
 
-            {/* Profile */}
-            {tab === 'profile' && (
-              <form onSubmit={handleProfileSave} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800">
-                  <h2 className="font-bold text-gray-900 dark:text-white">Personal Information</h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Update your public profile details.</p>
-                </div>
-                <div className="p-6 space-y-5">
-                  {/* Avatar */}
-                  <div className="flex items-center gap-4">
-                    <div className="relative group w-16 h-16 shrink-0">
-                      <div className="w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xl font-bold text-indigo-600 dark:text-indigo-400 overflow-hidden">
-                        {preview
-                          ? <img src={preview} alt="" className="w-full h-full object-cover" />
-                          : <span>{currentUser.name?.[0]?.toUpperCase()}</span>}
-                      </div>
-                      <label htmlFor="avatar-upload"
-                        className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                        <Camera className="h-5 w-5" />
-                        <input type="file" id="avatar-upload" className="hidden" accept="image/png,image/jpeg" onChange={handleImageChange} />
-                      </label>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{currentUser.name}</p>
-                      <p className="text-xs text-gray-400">Click avatar to change photo (max 2 MB)</p>
-                      {preview && (
-                        <div className="flex gap-2 mt-2">
-                          <button type="button" onClick={handleImageUpload} disabled={loading.avatar}
-                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1 disabled:opacity-60">
-                            {loading.avatar ? <Loader className="h-3 w-3 animate-spin" /> : null} Save
-                          </button>
-                          <button type="button" onClick={() => { setPreview(null); setImgFile(null); }}
-                            className="px-3 py-1 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                            Cancel
-                          </button>
-                        </div>
+          {/* Profile */}
+          {tab === 'profile' && (
+            <Card as="form" padding={false} onSubmit={handleProfileSave} className="animate-fade-up">
+              <CardHeader title="Personal information" subtitle="How you appear on leaderboards and to your teachers." />
+              <div className="p-5 sm:p-6 space-y-5">
+                {/* Avatar */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="relative w-14 h-14 shrink-0">
+                    {preview
+                      ? <img src={preview} alt="New profile photo preview" className="w-14 h-14 rounded-full object-cover ring-2 ring-brand-500/30" />
+                      : <Avatar name={currentUser.name} src={currentUser.profilePicture} size="lg" />}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-card" aria-hidden="true">
+                      <Camera className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">Profile photo</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">PNG, JPG or WebP. We crop it to a square.</p>
+                    <input ref={fileRef} type="file" id="avatar-upload" className="hidden" accept="image/png,image/jpeg,image/webp" onChange={handleImageChange} />
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      {preview ? (
+                        <>
+                          <Button size="sm" onClick={handleImageUpload} loading={loading.avatar}>Save photo</Button>
+                          <Button size="sm" variant="secondary" onClick={cancelImage} disabled={loading.avatar}>Cancel</Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="secondary" icon={Camera} onClick={() => fileRef.current?.click()}>
+                            {currentUser.profilePicture ? 'Change photo' : 'Upload photo'}
+                          </Button>
+                          {currentUser.profilePicture && (
+                            <Button size="sm" variant="ghost" onClick={handleImageRemove} loading={loading.avatar}>Remove</Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full name</label>
-                    <input value={name} onChange={e => setName(e.target.value)} required className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email address</label>
-                    <input value={currentUser.email} disabled className={`${inputCls} opacity-60 cursor-not-allowed`} />
-                    <p className="text-xs text-gray-400 mt-1">Email cannot be changed.</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                    <div className="px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-500 dark:text-gray-400 capitalize">
-                      {currentUser.role}
-                    </div>
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end bg-gray-50 dark:bg-gray-800/30">
-                  <button type="submit" disabled={loading.profile || name === currentUser.name}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-                    {loading.profile ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Save changes
-                  </button>
-                </div>
-              </form>
-            )}
+                <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-            {/* Security */}
-            {tab === 'security' && (
-              <form onSubmit={handlePasswordSave} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800">
-                  <h2 className="font-bold text-gray-900 dark:text-white">Change Password</h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Choose a strong, unique password.</p>
-                </div>
-                <div className="p-6 space-y-4">
-                  <PwField field="currentPassword"  label="Current password" />
-                  <PwField field="newPassword"       label="New password (min. 6 chars)" />
-                  <PwField field="confirmPassword"   label="Confirm new password" />
-                </div>
-                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end bg-gray-50 dark:bg-gray-800/30">
-                  <button type="submit" disabled={loading.password}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50">
-                    {loading.password ? <Loader className="h-4 w-4 animate-spin" /> : null}
-                    Update password
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Review */}
-            {tab === 'review' && (
-              <form onSubmit={handleReviewSubmit} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-6 py-5 border-b border-gray-100 dark:border-gray-800">
-                  <h2 className="font-bold text-gray-900 dark:text-white">Share Your Feedback</h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Your review helps improve the platform.</p>
-                </div>
-                <div className="p-6 space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rating</label>
-                    <div className="flex gap-2">
-                      {[1,2,3,4,5].map(s => (
-                        <button key={s} type="button" onClick={() => setReview(p => ({ ...p, rating: s }))}>
-                          <Star className={`h-7 w-7 transition-colors ${review.rating >= s ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-gray-600 hover:text-amber-300'}`} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your role</label>
-                    <input required value={review.role}
-                      onChange={e => setReview(p => ({ ...p, role: e.target.value }))}
-                      placeholder="e.g. B.Sc. Student, Teacher, L&D Manager…"
-                      className={inputCls} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your review</label>
-                    <textarea required rows={4} value={review.content}
-                      onChange={e => setReview(p => ({ ...p, content: e.target.value }))}
-                      placeholder="Tell us what you think about ExamVault…"
-                      className={`${inputCls} resize-none`} />
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end bg-gray-50 dark:bg-gray-800/30">
-                  <button type="submit" disabled={loading.review || !review.rating}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                    {loading.review ? <Loader className="h-4 w-4 animate-spin" /> : null} Submit review
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Danger zone */}
-            {tab === 'danger' && (
-              <div className="bg-white dark:bg-gray-900 border border-red-200 dark:border-red-900/40 rounded-xl overflow-hidden">
-                <div className="px-6 py-5 border-b border-red-100 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10">
-                  <h2 className="font-bold text-red-700 dark:text-red-400">Danger Zone</h2>
-                  <p className="text-sm text-red-600 dark:text-red-500 mt-0.5">These actions are permanent and cannot be undone.</p>
-                </div>
-                <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">Delete my account</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Permanently remove your account and all associated data.</p>
-                  </div>
-                  {!delConfirm ? (
-                    <button onClick={() => setDelConfirm(true)}
-                      className="shrink-0 px-5 py-2.5 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm font-semibold rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                      Delete account
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setDelConfirm(false)}
-                        className="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                        Cancel
-                      </button>
-                      <button disabled={loading.delete}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg disabled:opacity-60">
-                        {loading.delete ? 'Deleting…' : 'Confirm delete'}
-                      </button>
-                    </div>
-                  )}
+                <Input id="profile-name" label="Full name" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" />
+                <Input id="profile-email" label="Email address" type="email" value={currentUser.email} disabled hint="Email cannot be changed." />
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Account type</p>
+                  <Badge tone="brand">{roleLabel(currentUser.role)}</Badge>
                 </div>
               </div>
-            )}
-          </div>
+              <CardFooter>
+                <Button type="submit" icon={Save} loading={loading.profile} disabled={name === currentUser.name}>
+                  Save changes
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {/* Security */}
+          {tab === 'security' && (
+            <Card as="form" padding={false} onSubmit={handlePasswordSave} className="animate-fade-up">
+              <CardHeader title="Change password" subtitle="Choose a strong password you don't use elsewhere." />
+              <div className="p-5 sm:p-6 space-y-5">
+                {PW_FIELDS.map(({ field, label, auto, hint }) => (
+                  <Input key={field} id={`pw-${field}`} label={label} icon={KeyRound}
+                    type={showPw[field] ? 'text' : 'password'} required autoComplete={auto}
+                    value={pwData[field]}
+                    onChange={e => setPwData(p => ({ ...p, [field]: e.target.value }))}
+                    error={pwErrors[field]} hint={hint}
+                    trailing={<PasswordToggle shown={!!showPw[field]} onToggle={() => setShowPw(p => ({ ...p, [field]: !p[field] }))} />}
+                  />
+                ))}
+              </div>
+              <CardFooter>
+                <Button type="submit" icon={Lock} loading={loading.password}>Update password</Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {/* Review */}
+          {tab === 'review' && (
+            <Card as="form" padding={false} onSubmit={handleReviewSubmit} className="animate-fade-up">
+              <CardHeader title="Share your feedback" subtitle="Reviews appear on the ExamVault homepage." />
+              <div className="p-5 sm:p-6 space-y-5">
+                <div>
+                  <p id="rating-label" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rating</p>
+                  <div role="radiogroup" aria-labelledby="rating-label" className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <button key={s} type="button" role="radio" aria-checked={review.rating === s}
+                        aria-label={`${s} star${s > 1 ? 's' : ''} — ${RATING_LABELS[s - 1]}`}
+                        onClick={() => setReview(p => ({ ...p, rating: s }))}
+                        className="p-1 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-500/10">
+                        <Star aria-hidden="true"
+                          className={`h-7 w-7 ${review.rating >= s ? 'text-amber-400 fill-amber-400' : 'text-gray-300 dark:text-gray-600'}`} />
+                      </button>
+                    ))}
+                    <span className="ml-2 text-sm text-gray-500 dark:text-gray-400" aria-live="polite">
+                      {review.rating ? RATING_LABELS[review.rating - 1] : 'Select a rating'}
+                    </span>
+                  </div>
+                </div>
+                <Input id="review-role" label="Your role" required value={review.role}
+                  onChange={e => setReview(p => ({ ...p, role: e.target.value }))}
+                  placeholder="e.g. B.Sc. Student, Teacher, L&D Manager…" />
+                <div>
+                  <label htmlFor="review-content" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Your review</label>
+                  <textarea id="review-content" required rows={4} value={review.content}
+                    onChange={e => setReview(p => ({ ...p, content: e.target.value }))}
+                    placeholder="Tell us what you think about ExamVault…"
+                    className={`${inputClass} h-auto py-3 resize-none`} />
+                </div>
+              </div>
+              <CardFooter>
+                <Button type="submit" icon={Send} loading={loading.review} disabled={!review.rating}>Submit review</Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {/* Danger zone */}
+          {tab === 'danger' && (
+            <div className="bg-white dark:bg-gray-900 border border-red-200 dark:border-red-500/30 rounded-2xl shadow-card overflow-hidden animate-fade-up">
+              <div className="px-5 sm:px-6 py-4 border-b border-red-100 dark:border-red-500/20 bg-red-50/70 dark:bg-red-500/5">
+                <h2 className="text-[15px] font-bold text-red-700 dark:text-red-400">Danger zone</h2>
+                <p className="text-xs text-red-600/90 dark:text-red-400/80 mt-0.5">These actions are permanent and cannot be undone.</p>
+              </div>
+              <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white">Delete my account</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Permanently remove your account, attempts and results.</p>
+                </div>
+                <Button variant="danger" icon={Trash2} onClick={() => setDelConfirm(true)} className="shrink-0">
+                  Delete account
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </div>
+
+      <Modal
+        open={delConfirm}
+        onClose={() => setDelConfirm(false)}
+        dismissible={!loading.delete}
+        size="sm"
+        title="Delete your account?"
+        description="This permanently removes your profile and all quiz attempts. You can't undo this."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDelConfirm(false)} disabled={loading.delete}>Cancel</Button>
+            <Button variant="danger" icon={Trash2} onClick={handleDeleteAccount} loading={loading.delete}>
+              {loading.delete ? 'Deleting…' : 'Confirm delete'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          You're signed in as <span className="font-semibold text-gray-900 dark:text-white">{currentUser.email}</span>.
+        </p>
+      </Modal>
+    </Page>
   );
 };
 

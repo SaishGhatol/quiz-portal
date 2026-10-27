@@ -3,10 +3,16 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import AuthContext from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import Logo from '../Logo';
+import Avatar from '../ui/Avatar';
+import Button from '../ui/Button';
+import { roleHome } from '../../utils/roles';
 import {
-  Sun, Moon, Menu, X, LogOut, ChevronDown,
-  UserCog, Trophy, Settings, BarChart2, Layers, BookOpen
+  Sun, Moon, Menu, X, LogOut, ChevronDown, Compass, LayoutDashboard, Building2, Megaphone, MessageSquareQuote, FileDown, NotebookPen, Bookmark,
+  UserCog, Trophy, BarChart2, Layers, BookOpen, CreditCard, History, Users, Tag, ClipboardList
 } from 'lucide-react';
+
+const isActivePath = (pathname, to, exact) =>
+  exact ? pathname === to : pathname === to || pathname.startsWith(to + '/');
 
 const Navbar = () => {
   const { currentUser, logout, isAdmin, isOrgAdmin } = useContext(AuthContext);
@@ -15,7 +21,7 @@ const Navbar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const navigate   = useNavigate();
-  const location   = useLocation();
+  const { pathname } = useLocation();
 
   const isStudent = currentUser && !isOrgAdmin && !isAdmin;
   const hasOrg    = !!currentUser?.orgId;
@@ -27,166 +33,159 @@ const Navbar = () => {
     navigate('/');
   };
 
+  // Close the profile menu on outside click or Escape
   useEffect(() => {
-    const h = e => {
+    const onDown = e => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
     };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    const onKey = e => { if (e.key === 'Escape') { setProfileOpen(false); setMobileOpen(false); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
-  useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [location.pathname]);
+  useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [pathname]);
 
-  const active = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
+  // Each role gets its own top-level tools; the same lists drive the desktop bar and the mobile panel
+  const role = currentUser?.role;
+  const primary = (
+    role === 'admin' ? [
+      { to: '/admin',           label: 'Overview',  icon: LayoutDashboard, exact: true },
+      { to: '/admin/quizzes',   label: 'Quizzes',   icon: BookOpen },
+      { to: '/admin/users',     label: 'Users',     icon: Users },
+      { to: '/admin/reviews',   label: 'Reviews',   icon: MessageSquareQuote },
+      { to: '/admin/analytics', label: 'Analytics', icon: BarChart2 },
+    ] : role === 'org_admin' ? [
+      { to: '/org',             label: 'Overview',    icon: LayoutDashboard, exact: true },
+      { to: '/admin/quizzes',   label: 'Quizzes',     icon: BookOpen },
+      { to: '/org/batches',     label: 'Batches',     icon: Layers },
+      { to: '/org/students',    label: 'Students',    icon: Users },
+      { to: '/org/assignments', label: 'Assignments', icon: ClipboardList },
+    ] : currentUser ? [
+      { to: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, exact: true },
+      { to: '/quizzes',     label: 'Explore',     icon: Compass, exact: true },
+      hasOrg && { to: '/my-classes', label: 'My Classes', icon: Building2, exact: true },
+      { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, exact: true },
+    ] : [
+      { to: '/quizzes',     label: 'Explore',     icon: Compass, exact: true },
+      { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, exact: true },
+      { to: '/pricing',     label: 'Pricing',     icon: Tag, exact: true },
+    ]
+  ).filter(Boolean);
 
-  const NavLink = ({ to, children, exact = false }) => {
-    const isActive = exact ? location.pathname === to : active(to);
-    return (
-      <Link to={to}
-        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-          isActive
-            ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800/60'
-        }`}>
-        {children}
-      </Link>
-    );
-  };
+  // Account menu: learners get their history; admins get the rest of their workspace
+  const personal = [
+    isStudent && { to: '/my-attempts', label: 'My attempts',     icon: History },
+    isStudent && { to: '/progress',    label: 'Progress report', icon: BarChart2 },
+    isStudent && { to: '/mistakes',    label: 'Mistake notebook', icon: NotebookPen },
+    isStudent && { to: '/quizzes?view=saved', label: 'Saved quizzes', icon: Bookmark },
+    isStudent && hasOrg && { to: '/my-assignments', label: 'Assignments', icon: ClipboardList },
+    { to: '/profile', label: 'Profile settings', icon: UserCog },
+  ].filter(Boolean);
 
-  const DropItem = ({ to, icon: Icon, children }) => (
-    <Link to={to} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-      <Icon className="h-4 w-4 text-gray-400 shrink-0" />
-      {children}
-    </Link>
-  );
+  const orgLinks = role === 'org_admin' ? [
+    { to: '/org/analytics',     label: 'Analytics',     icon: BarChart2 },
+    { to: '/org/announcements', label: 'Announcements', icon: Megaphone },
+    { to: '/org/billing',       label: 'Plan & billing', icon: CreditCard },
+    { to: '/quizzes',           label: 'Preview as student', icon: Compass },
+  ] : [];
+
+  const adminLinks = role === 'admin' ? [
+    { to: '/admin/reports', label: 'Reports & exports', icon: FileDown },
+    { to: '/quizzes',       label: 'Preview as student', icon: Compass },
+  ] : [];
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-50 h-16 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center gap-4">
+      <header className="fixed top-0 inset-x-0 z-50 h-16 bg-white/85 dark:bg-gray-950/85 backdrop-blur-md border-b border-gray-200/80 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center gap-6">
 
           {/* Brand */}
-          <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <Logo size={28} />
-            <span className="font-bold text-gray-900 dark:text-white text-[15px] tracking-tight hidden sm:block">
+          <Link to={currentUser ? roleHome(currentUser) : '/'} className="flex items-center gap-2.5 shrink-0" aria-label="ExamVault home">
+            <Logo size={30} />
+            <span className="font-display font-bold text-gray-900 dark:text-white text-[17px] hidden sm:block">
               ExamVault
             </span>
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-0.5 flex-1">
-            <NavLink to="/quizzes" exact>Explore</NavLink>
-            <NavLink to="/leaderboard" exact>Leaderboard</NavLink>
-
-            {currentUser && <NavLink to="/dashboard" exact>Dashboard</NavLink>}
-
-            {/* Students in an org → My Classes */}
-            {isStudent && hasOrg && <NavLink to="/my-classes" exact>My Classes</NavLink>}
-
-            {/* Org admin → My Org (hub for all org admin pages) */}
-            {isOrgAdmin && <NavLink to="/org">My Org</NavLink>}
-
-            {/* Quiz creation for org_admin and platform admin */}
-            {(isOrgAdmin || isAdmin) && <NavLink to="/admin/quizzes">Quizzes</NavLink>}
-
-            {/* Platform admin only */}
-            {isAdmin && <NavLink to="/admin/users">Users</NavLink>}
-
-            {!currentUser && <NavLink to="/pricing" exact>Pricing</NavLink>}
+          <nav className="hidden md:flex items-center gap-1 flex-1 min-w-0" aria-label="Main">
+            {primary.map(l => {
+              const active = isActivePath(pathname, l.to, l.exact);
+              return (
+                <Link key={l.to} to={l.to} aria-current={active ? 'page' : undefined}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
+                    active
+                      ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800/70'
+                  }`}>
+                  <l.icon className="h-4 w-4 hidden lg:block" aria-hidden="true" />
+                  {l.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 ml-auto">
-            {/* Theme toggle */}
-            <button onClick={toggle} aria-label="Toggle theme"
-              className="p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button onClick={toggle} type="button"
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+              {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
             </button>
 
             {currentUser ? (
-              /* ── Profile dropdown ── */
               <div className="relative hidden md:block" ref={profileRef}>
-                <button onClick={() => setProfileOpen(o => !o)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                  <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                    {currentUser.name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200 hidden lg:block max-w-[110px] truncate">
-                    {currentUser.name}
+                <button type="button" onClick={() => setProfileOpen(o => !o)}
+                  aria-haspopup="menu" aria-expanded={profileOpen} aria-label="Account menu"
+                  className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900">
+                  <Avatar name={currentUser.name} src={currentUser.profilePicture} size="sm" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200 hidden lg:block max-w-[120px] truncate">
+                    {currentUser.name?.split(' ')[0]}
                   </span>
-                  <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-3.5 w-3.5 text-gray-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
                 </button>
 
                 {profileOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden z-50">
-                    {/* User info */}
-                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{currentUser.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{currentUser.email}</p>
-                      <span className="inline-block mt-1 text-xs px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded font-medium capitalize">
-                        {currentUser.role?.replace('_', ' ')}
-                      </span>
+                  <div role="menu"
+                    className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-pop overflow-hidden z-50 animate-scale-in origin-top-right">
+                    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-100 dark:border-gray-800">
+                      <Avatar name={currentUser.name} src={currentUser.profilePicture} size="md" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{currentUser.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser.email}</p>
+                      </div>
                     </div>
 
-                    {/* Common links */}
-                    <DropItem to="/profile"     icon={UserCog}>Profile settings</DropItem>
-                    <DropItem to="/my-attempts" icon={Trophy}>My attempts</DropItem>
-                    <DropItem to="/progress"    icon={BarChart2}>Progress report</DropItem>
+                    <MenuGroup links={personal} />
+                    {orgLinks.length > 0 && <MenuGroup title="Organisation" links={orgLinks} />}
+                    {adminLinks.length > 0 && <MenuGroup title="Admin" links={adminLinks} />}
 
-                    {/* Student org links */}
-                    {isStudent && hasOrg && (
-                      <DropItem to="/my-classes" icon={Layers}>My classes</DropItem>
-                    )}
-
-                    {/* Org admin links */}
-                    {isOrgAdmin && (
-                      <>
-                        <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
-                          <p className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">Organisation</p>
-                          <DropItem to="/org"              icon={Settings}>Dashboard</DropItem>
-                          <DropItem to="/org/batches"      icon={Layers}>Batches</DropItem>
-                          <DropItem to="/org/students"     icon={UserCog}>Students</DropItem>
-                          <DropItem to="/org/assignments"  icon={BookOpen}>Assignments</DropItem>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Platform admin links */}
-                    {isAdmin && (
-                      <div className="border-t border-gray-100 dark:border-gray-800 mt-1 pt-1">
-                        <p className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">Admin</p>
-                        <DropItem to="/admin"         icon={Settings}>Admin dashboard</DropItem>
-                        <DropItem to="/admin/quizzes" icon={BookOpen}>Manage quizzes</DropItem>
-                        <DropItem to="/admin/users"   icon={UserCog}>Manage users</DropItem>
-                      </div>
-                    )}
-
-                    {/* Logout */}
-                    <div className="border-t border-gray-100 dark:border-gray-800 mt-1">
-                      <button onClick={handleLogout}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                        <LogOut className="h-4 w-4 shrink-0" /> Sign out
+                    <div className="border-t border-gray-100 dark:border-gray-800 p-1.5">
+                      <button type="button" role="menuitem" onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10">
+                        <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" /> Sign out
                       </button>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="hidden md:flex items-center gap-2">
-                <Link to="/login"
-                  className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  Login
-                </Link>
-                <Link to="/register"
-                  className="px-3 py-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors">
-                  Register
-                </Link>
+              <div className="hidden md:flex items-center gap-1.5">
+                <Button to="/login" variant="ghost">Sign in</Button>
+                <Button to="/register">Get started</Button>
               </div>
             )}
 
             {/* Mobile hamburger */}
-            <button onClick={() => setMobileOpen(o => !o)}
-              className="md:hidden p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <button type="button" onClick={() => setMobileOpen(o => !o)}
+              aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileOpen}
+              className="md:hidden h-10 w-10 flex items-center justify-center rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
@@ -196,57 +195,35 @@ const Navbar = () => {
       {/* ── Mobile panel ── */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/20 dark:bg-black/50" onClick={() => setMobileOpen(false)} />
-          <nav className="absolute top-16 inset-x-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 shadow-sm px-4 py-3 space-y-0.5 max-h-[80vh] overflow-y-auto">
-            <MobileNavLink to="/quizzes"     loc={location}>Explore Quizzes</MobileNavLink>
-            <MobileNavLink to="/leaderboard" loc={location}>Leaderboard</MobileNavLink>
+          <div className="absolute inset-0 bg-gray-950/30 dark:bg-black/60 animate-fade-in" onClick={() => setMobileOpen(false)} />
+          <nav aria-label="Mobile"
+            className="absolute top-16 inset-x-0 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 shadow-pop px-4 pt-3 pb-5 max-h-[calc(100vh-4rem)] overflow-y-auto animate-fade-up">
 
-            {currentUser && <MobileNavLink to="/dashboard"   loc={location}>Dashboard</MobileNavLink>}
-            {currentUser && <MobileNavLink to="/my-attempts" loc={location}>My Attempts</MobileNavLink>}
-            {currentUser && <MobileNavLink to="/progress"    loc={location}>Progress</MobileNavLink>}
-
-            {/* Student org */}
-            {isStudent && hasOrg && <MobileNavLink to="/my-classes" loc={location}>My Classes</MobileNavLink>}
-
-            {/* Org admin */}
-            {isOrgAdmin && (
-              <>
-                <div className="pt-2 pb-1">
-                  <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Organisation</p>
+            {currentUser && (
+              <div className="flex items-center gap-3 px-3 py-3 mb-2 rounded-xl bg-gray-50 dark:bg-gray-900">
+                <Avatar name={currentUser.name} src={currentUser.profilePicture} size="md" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{currentUser.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{currentUser.email}</p>
                 </div>
-                <MobileNavLink to="/org"             loc={location}>Dashboard</MobileNavLink>
-                <MobileNavLink to="/org/batches"     loc={location}>Batches</MobileNavLink>
-                <MobileNavLink to="/org/students"    loc={location}>Students</MobileNavLink>
-                <MobileNavLink to="/org/assignments" loc={location}>Assignments</MobileNavLink>
-                <MobileNavLink to="/org/analytics"   loc={location}>Analytics</MobileNavLink>
-                <MobileNavLink to="/admin/quizzes"   loc={location}>Quizzes</MobileNavLink>
-              </>
+              </div>
             )}
 
-            {/* Platform admin */}
-            {isAdmin && (
-              <>
-                <div className="pt-2 pb-1">
-                  <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Admin</p>
-                </div>
-                <MobileNavLink to="/admin"         loc={location}>Admin Dashboard</MobileNavLink>
-                <MobileNavLink to="/admin/quizzes" loc={location}>Manage Quizzes</MobileNavLink>
-                <MobileNavLink to="/admin/users"   loc={location}>Manage Users</MobileNavLink>
-              </>
-            )}
+            <MobileGroup links={primary} pathname={pathname} />
+            {currentUser && <MobileGroup title="You" links={personal} pathname={pathname} />}
+            {orgLinks.length > 0 && <MobileGroup title="Organisation" links={orgLinks} pathname={pathname} />}
+            {adminLinks.length > 0 && <MobileGroup title="Admin" links={adminLinks} pathname={pathname} />}
 
-            {!currentUser && <MobileNavLink to="/pricing" loc={location}>Pricing</MobileNavLink>}
-
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-800 mt-2">
+            <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-800">
               {currentUser ? (
-                <button onClick={handleLogout}
-                  className="w-full text-left px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20">
-                  Sign out
+                <button type="button" onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10">
+                  <LogOut className="h-4 w-4" aria-hidden="true" /> Sign out
                 </button>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  <Link to="/login"    className="px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-md text-center">Login</Link>
-                  <Link to="/register" className="px-3 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-md text-center">Register</Link>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button to="/login" variant="secondary">Sign in</Button>
+                  <Button to="/register">Get started</Button>
                 </div>
               )}
             </div>
@@ -257,18 +234,37 @@ const Navbar = () => {
   );
 };
 
-const MobileNavLink = ({ to, children, loc }) => {
-  const isActive = loc.pathname === to || loc.pathname.startsWith(to + '/');
-  return (
-    <Link to={to}
-      className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-        isActive
-          ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-      }`}>
-      {children}
-    </Link>
-  );
-};
+const MenuGroup = ({ title, links }) => (
+  <div className="p-1.5 border-t first:border-t-0 border-gray-100 dark:border-gray-800">
+    {title && <p className="px-3 pt-1.5 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{title}</p>}
+    {links.map(l => (
+      <Link key={l.to} to={l.to} role="menuitem"
+        className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+        <l.icon className="h-4 w-4 text-gray-400 shrink-0" aria-hidden="true" />
+        {l.label}
+      </Link>
+    ))}
+  </div>
+);
+
+const MobileGroup = ({ title, links, pathname }) => (
+  <div className="py-1">
+    {title && <p className="px-3 pt-3 pb-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{title}</p>}
+    {links.map(l => {
+      const active = isActivePath(pathname, l.to, l.exact);
+      return (
+        <Link key={l.to} to={l.to} aria-current={active ? 'page' : undefined}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
+            active
+              ? 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300'
+              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900'
+          }`}>
+          <l.icon className={`h-4 w-4 ${active ? '' : 'text-gray-400'}`} aria-hidden="true" />
+          {l.label}
+        </Link>
+      );
+    })}
+  </div>
+);
 
 export default Navbar;

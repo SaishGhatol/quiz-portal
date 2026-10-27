@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Must match the server's default PORT, so the app works without a .env file
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
 
 const api = axios.create({
   baseURL,
@@ -31,7 +32,7 @@ api.interceptors.response.use(
   (error) => {
     // Handle token expiration or authentication issues
     if (error.response) {
-      const { status, data } = error.response;
+      const { status } = error.response;
       
       if (status === 401) {
         localStorage.removeItem('token');

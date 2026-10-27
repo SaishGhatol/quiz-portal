@@ -4,11 +4,12 @@ import { toast } from 'react-toastify';
 import api from '../../utils/api';
 import { useOrg } from '../../contexts/OrgContext';
 import AuthContext from '../../contexts/AuthContext';
-import { Building2, Loader, ArrowRight } from 'lucide-react';
+import { Building2, ArrowRight } from 'lucide-react';
+import { Button } from '../ui';
 
 const TYPES = ['tuition', 'school', 'college', 'corporate', 'university', 'other'];
 
-const inp = 'w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+const inp = 'w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent';
 
 const OrgSetup = () => {
   const navigate              = useNavigate();
@@ -43,17 +44,23 @@ const OrgSetup = () => {
     <div className="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-lg">
 
+        <Link to="/dashboard" className="inline-block text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-4">← Back to dashboard</Link>
+
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl mb-4">
-            <Building2 className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-brand-50 dark:bg-brand-500/10 rounded-2xl mb-4">
+            <Building2 className="h-6 w-6 text-brand-600 dark:text-brand-400" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Set up your organisation</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Create your tuition or institute profile to manage students and quizzes.
           </p>
+          <p className="text-sm text-gray-400 mt-2">
+            Joining an existing institute instead?{' '}
+            <Link to="/org/join" className="text-brand-600 dark:text-brand-400 hover:underline">Use an invite code</Link>
+          </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-7">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card p-7">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -105,18 +112,15 @@ const OrgSetup = () => {
               </div>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60">
-              {loading
-                ? <><Loader className="h-4 w-4 animate-spin" /> Creating…</>
-                : <><ArrowRight className="h-4 w-4" /> Create Organisation</>}
-            </button>
+            <Button type="submit" fullWidth icon={ArrowRight} loading={loading}>
+              {loading ? 'Creating…' : 'Create Organisation'}
+            </Button>
           </form>
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
           Already have an invite code?{' '}
-          <Link to="/org/join" className="text-indigo-600 dark:text-indigo-400 hover:underline">Join an existing org</Link>
+          <Link to="/org/join" className="text-brand-600 dark:text-brand-400 hover:underline">Join an existing org</Link>
         </p>
       </div>
     </div>

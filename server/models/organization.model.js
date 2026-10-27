@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 const crypto   = require('crypto');
 
+// Invite codes avoid look-alike characters (no 0/O, 1/I) so they're easy to read out and type
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const makeInviteCode = (len = 8) =>
+  Array.from({ length: len }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
+
 const orgSchema = new mongoose.Schema({
   name:         { type: String, required: true, trim: true },
   type:         { type: String, enum: ['tuition', 'school', 'college', 'corporate', 'university', 'other'], default: 'tuition' },
@@ -11,11 +16,11 @@ const orgSchema = new mongoose.Schema({
   website:      { type: String, default: '' },
   address:      { type: String, default: '' },
 
-  // 6-char alphanumeric code students use to join
+  // 8-char code students use to join (older orgs may still have 6-char codes)
   inviteCode: {
     type: String,
     unique: true,
-    default: () => crypto.randomBytes(3).toString('hex').toUpperCase()
+    default: () => makeInviteCode()
   },
 
   plan:        { type: String, enum: ['free', 'basic', 'pro', 'enterprise'], default: 'free' },
@@ -24,6 +29,7 @@ const orgSchema = new mongoose.Schema({
   adminUsers:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isActive:    { type: Boolean, default: true },
 
+  // Informational snapshot only — limits are always enforced from config/plans.js by `plan`
   limits: {
     maxStudents: { type: Number, default: 25 },
     maxBatches:  { type: Number, default: 3 },
@@ -35,5 +41,7 @@ const orgSchema = new mongoose.Schema({
     brandColor:      { type: String,  default: '#4f46e5' }
   }
 }, { timestamps: true });
+
+orgSchema.statics.makeInviteCode = makeInviteCode;
 
 module.exports = mongoose.model('Organization', orgSchema);

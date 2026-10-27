@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import api from '../../utils/api';
-import { Loader, AlertTriangle, ArrowLeft, Users, CheckCircle, BarChart2, Clock, Trophy, Download } from 'lucide-react';
+import { Users, CheckCircle, BarChart2, Trophy, Download } from 'lucide-react';
+import { Page, PageHeader, Button, Spinner, ErrorState, EmptyState, StatCard } from '../ui';
 
 /* ── SVG bar chart ───────────────────────────────────────────────────────── */
-const BarChart = ({ data, color = '#4f46e5', height = 160 }) => {
+const BarChart = ({ data, color = '#0b847c', height = 160 }) => {
   if (!data || data.length === 0) return <p className="text-center text-sm text-gray-400 py-8">No data</p>;
   const maxVal = Math.max(...data.map(d => d.value), 1);
   const barW = 100 / data.length;
@@ -60,31 +61,33 @@ const QuizStatistics = () => {
 
   const downloadCSV = () => {
     if (!stats?.questionStats) return;
+    // Quote every cell and neutralise spreadsheet formulas (=, +, -, @, tab, CR at the start)
+    const cell = v => {
+      let s = v === null || v === undefined ? '' : String(v);
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
     const rows = [
       ['Question', 'Correct', 'Total Attempts', 'Success Rate (%)'],
       ...stats.questionStats.map(q => [
-        `"${q.text?.replace(/"/g, '""')}"`,
+        q.text,
         q.correctCount,
         q.totalAttempts,
         q.successRate?.toFixed(1),
       ]),
     ];
-    const csv = rows.map(r => r.join(',')).join('\n');
+    const csv = rows.map(r => r.map(cell).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = `${quiz?.title || 'quiz'}-stats.csv`;
     a.click();
   };
 
-  if (loading) return <div className="flex justify-center items-center min-h-[50vh] bg-white dark:bg-gray-950"><Loader className="animate-spin h-6 w-6 text-indigo-500" /></div>;
+  if (loading) return <Page><Spinner label="Loading statistics" /></Page>;
   if (error)   return (
-    <div className="min-h-[50vh] bg-white dark:bg-gray-950 flex items-center justify-center px-4">
-      <div className="text-center">
-        <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-3" />
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{error}</p>
-        <Link to="/admin/quizzes" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">← Back</Link>
-      </div>
-    </div>
+    <Page>
+      <ErrorState message={error} action={<Button to="/admin/quizzes" variant="secondary">← Back</Button>} />
+    </Page>
   );
 
   const kpis = [
@@ -100,32 +103,19 @@ const QuizStatistics = () => {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+    <Page>
 
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
-          <div>
-            <Link to="/admin/quizzes" className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-1 mb-2">
-              <ArrowLeft className="h-3.5 w-3.5" /> Quizzes
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{quiz?.title}</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 capitalize">{quiz?.category} · {quiz?.difficulty}</p>
-          </div>
-          <button onClick={downloadCSV}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <Download className="h-4 w-4" /> Export CSV
-          </button>
-        </div>
+        <PageHeader
+          back={{ to: '/admin/quizzes', label: 'Quizzes' }}
+          title={quiz?.title}
+          description={<span className="capitalize">{quiz?.category} · {quiz?.difficulty}</span>}
+          actions={<Button variant="secondary" icon={Download} onClick={downloadCSV}>Export CSV</Button>}
+        />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
           {kpis.map((k, i) => (
-            <div key={i} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5">
-              <k.icon className="h-5 w-5 text-indigo-500 mb-3" />
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{k.value}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{k.label}</p>
-            </div>
+            <StatCard key={i} icon={k.icon} label={k.label} value={k.value} />
           ))}
         </div>
 
@@ -146,14 +136,14 @@ const QuizStatistics = () => {
         {tab === 'summary' && (
           <div className="space-y-5">
             {questionBars.length > 0 ? (
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6">
+              <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card p-6">
                 <h2 className="font-bold text-gray-900 dark:text-white mb-4">Question success rates</h2>
-                <BarChart data={questionBars} color="#4f46e5" />
+                <BarChart data={questionBars} color="#0b847c" />
                 <p className="text-xs text-gray-400 mt-2 text-center">% of students who answered each question correctly</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center text-gray-400 text-sm">
-                No attempt data yet.
+              <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card">
+                <EmptyState compact icon={BarChart2} title="No attempt data yet." />
               </div>
             )}
           </div>
@@ -161,8 +151,8 @@ const QuizStatistics = () => {
 
         {/* Questions tab */}
         {tab === 'questions' && (
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card overflow-hidden">
+            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
               <span className="col-span-6">Question</span>
               <span className="col-span-2 text-right">Correct</span>
               <span className="col-span-2 text-right">Attempts</span>
@@ -179,7 +169,7 @@ const QuizStatistics = () => {
                     <span className="col-span-2 text-right text-sm text-gray-600 dark:text-gray-300">{q.totalAttempts ?? 0}</span>
                     <div className="col-span-2 flex items-center justify-end gap-2">
                       <div className="w-12 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                        <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${Math.min(q.successRate ?? 0, 100)}%` }} />
+                        <div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${Math.min(q.successRate ?? 0, 100)}%` }} />
                       </div>
                       <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-8 text-right">
                         {Math.round(q.successRate ?? 0)}%
@@ -194,8 +184,8 @@ const QuizStatistics = () => {
 
         {/* Recent attempts tab */}
         {tab === 'attempts' && (
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card overflow-hidden">
+            <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40">
               <span className="col-span-4">Student</span>
               <span className="col-span-3 text-right">Score</span>
               <span className="col-span-3 text-right">Time</span>
@@ -212,7 +202,7 @@ const QuizStatistics = () => {
                       <p className="text-xs text-gray-400">{a.user?.email}</p>
                     </div>
                     <span className={`col-span-3 text-right text-sm font-semibold
-                      ${a.score >= 70 ? 'text-green-600 dark:text-green-400' : a.score >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
+                      ${a.score >= (quiz?.passScore ?? 60) ? 'text-green-600 dark:text-green-400' : a.score >= (quiz?.passScore ?? 60) * 0.7 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
                       {a.score}%
                     </span>
                     <span className="col-span-3 text-right text-sm text-gray-500 dark:text-gray-400">
@@ -227,8 +217,7 @@ const QuizStatistics = () => {
             )}
           </div>
         )}
-      </div>
-    </div>
+    </Page>
   );
 };
 

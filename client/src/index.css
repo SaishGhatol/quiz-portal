@@ -3,6 +3,49 @@
 /* ── Dark-mode: class-based ── */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Design tokens ──
+   The brand colour lives in one scale (--color-brand-*). The neutral scale is
+   overridden with a slightly cooler grey so every page — including ones that
+   still hand-roll their classes — picks up the same surfaces in both themes. */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand — a fresh "lagoon" teal. Swap these 11 values to re-skin the whole app.
+     600 keeps white text at WCAG AA (4.56:1); 400 is the dark-mode text shade. */
+  --color-brand-50:  #effcfa;
+  --color-brand-100: #d3f5f0;
+  --color-brand-200: #a9eae2;
+  --color-brand-300: #72d8ce;
+  --color-brand-400: #36bfb4;
+  --color-brand-500: #14a399;
+  --color-brand-600: #0b847c;
+  --color-brand-700: #0c6a64;
+  --color-brand-800: #0e5551;
+  --color-brand-900: #104744;
+  --color-brand-950: #03292a;
+
+  --color-gray-50:  #f7f8fa;
+  --color-gray-100: #eff1f5;
+  --color-gray-200: #e3e6ed;
+  --color-gray-300: #cdd2dc;
+  --color-gray-400: #949bab;
+  --color-gray-500: #687084;
+  --color-gray-600: #4b5264;
+  --color-gray-700: #363c4c;
+  --color-gray-800: #232836;
+  --color-gray-900: #161a25;
+  --color-gray-950: #0d1018;
+
+  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.05);
+  --shadow-raised: 0 4px 12px -2px rgb(16 24 40 / 0.08), 0 2px 4px -2px rgb(16 24 40 / 0.04);
+  --shadow-pop: 0 16px 40px -8px rgb(16 24 40 / 0.18), 0 4px 12px -4px rgb(16 24 40 / 0.08);
+
+  --animate-fade-up: fadeUp 0.3s ease-out both;
+  --animate-fade-in: fadeIn 0.2s ease-out both;
+  --animate-scale-in: scaleIn 0.18s ease-out both;
+}
+
 /* ── Reset & base ── */
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -13,17 +56,54 @@ html {
 
 body {
   overflow-x: hidden;
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  background-color: #ffffff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+.dark body { background-color: var(--color-gray-950); }
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
 }
 
 #root { min-height: 100vh; }
 
+/* Numbers that update in place (timers, scores) should not jitter */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* ── Keyboard focus ── */
+/* Many inputs set focus:outline-none, so give keyboard users one consistent ring */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* A mouse click should not leave a ring behind */
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── Respect the OS "reduce motion" setting ── */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── Custom scrollbar ── */
-::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar       { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 999px; }
-.dark ::-webkit-scrollbar-thumb { background: #374151; }
+::-webkit-scrollbar-thumb { background: var(--color-gray-300); border-radius: 999px; }
+.dark ::-webkit-scrollbar-thumb { background: var(--color-gray-700); }
+
+/* Horizontal chip rows scroll without a visible bar */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* ── Smooth color transitions (colors only — keep transforms instant) ── */
 *, *::before, *::after {
@@ -34,16 +114,55 @@ body {
 /* Prevent transition on SVGs and animated elements */
 svg, path, [class*="animate-"] { transition: none !important; }
 
-/* ── Simple fade animations ── */
+/* ── Simple entrance animations ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-up  { animation: fadeUp 0.3s ease-out forwards; }
-.animate-fade-in  { animation: fadeUp 0.3s ease-out forwards; }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
 
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
 .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+
+/* ── Toasts: match the card language ── */
+:root {
+  --toastify-color-progress-light: var(--color-brand-500);
+  --toastify-color-progress-dark: var(--color-brand-400);
+  --toastify-color-dark: var(--color-gray-900);
+}
+.Toastify__toast {
+  font-family: var(--font-sans);
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-pop) !important;
+}
+
+/* Keyboard shortcut hint */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.3rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--color-gray-200);
+  border-bottom-width: 2px;
+  border-radius: 0.3rem;
+  background: #fff;
+  color: var(--color-gray-600);
+  font: 600 10px/1 var(--font-sans);
+}
+.dark .kbd {
+  border-color: var(--color-gray-700);
+  background: var(--color-gray-900);
+  color: var(--color-gray-300);
+}

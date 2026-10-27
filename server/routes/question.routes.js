@@ -1,49 +1,49 @@
 const express            = require('express');
 const questionController = require('../controllers/question.controller');
-const { authenticateJWT } = require('../middleware/auth.middleware');
+const { isOrgAdmin }     = require('../middleware/auth.middleware');
+const { objectIdParam }  = require('../middleware/objectId.middleware');
 
 const router = express.Router();
 
-// All question routes are now mounted at /api/questions
-// (previously mounted at /api which caused conflicts with /api/org etc.)
+// All question routes are mounted at /api/questions behind authenticateJWT (see index.js).
+// Writes need an org admin or platform admin; the controller then checks canManageQuiz,
+// so org admins can only touch their own organisation's quizzes.
+
+router.param('id', objectIdParam);
+router.param('quizId', objectIdParam);
+router.param('questionId', objectIdParam);
+
+// Questions for a quiz (answer keys only for managers with ?withAnswers=true)
+router.get('/quiz/:quizId', questionController.getQuestionsByQuiz);
 
 // Single question CRUD
-router.post('/',       questionController.createQuestion);
-router.post('/bulk',   questionController.bulkCreateQuestions);
-router.get('/:id',     questionController.getQuestionsByQuiz);   // get by quiz id
-router.put('/:id',     questionController.updateQuestion);
-router.delete('/:id',  questionController.deleteQuestion);
-
-// Nested: questions for a specific quiz
-router.get('/quiz/:quizId',  questionController.getQuestionsByQuiz);
+router.post('/',       isOrgAdmin, questionController.createQuestion);
+router.post('/bulk',   isOrgAdmin, questionController.bulkCreateQuestions);
+router.get('/:id',     questionController.getQuestionById);
+router.put('/:id',     isOrgAdmin, questionController.updateQuestion);
+router.delete('/:id',  isOrgAdmin, questionController.deleteQuestion);
 
 // Nested quiz question routes (kept for backward compat)
-router.post('/quizzes/:id/questions', (req, res, next) => {
-  req.body.quizId = req.params.id;
-  next();
-}, questionController.createQuestion);
+router.post('/quizzes/:id/questions', isOrgAdmin, (req, res, next) => {
+  req.body = { ...(req.body || {}), quizId: req.params.id };
+  questionController.createQuestion(req, res, next);
+});
 
-router.put('/quizzes/:id/questions/:questionId', (req, res) => {
+router.post('/quizzes/:id/questions/bulk', isOrgAdmin, (req, res, next) => {
+  req.body = { ...(req.body || {}), quizId: req.params.id };
+  questionController.bulkCreateQuestions(req, res, next);
+});
+
+router.put('/quizzes/:id/questions/:questionId', isOrgAdmin, (req, res, next) => {
   req.params.id = req.params.questionId;
-  questionController.updateQuestion(req, res);
+  questionController.updateQuestion(req, res, next);
 });
 
-router.delete('/quizzes/:id/questions/:questionId', (req, res) => {
+router.delete('/quizzes/:id/questions/:questionId', isOrgAdmin, (req, res, next) => {
   req.params.id = req.params.questionId;
-  questionController.deleteQuestion(req, res);
+  questionController.deleteQuestion(req, res, next);
 });
 
-router.post('/quizzes/:id/questions/bulk', (req, res, next) => {
-  req.body.quizId = req.params.id;
-  next();
-}, questionController.bulkCreateQuestions);
-
-router.put('/quizzes/:id/questions/:questionId/reorder', (req, res) => {
-  if (typeof questionController.reorderQuestion === 'function') {
-    questionController.reorderQuestion(req, res);
-  } else {
-    res.status(501).json({ message: 'Reorder not implemented' });
-  }
-});
+router.put('/quizzes/:id/questions/:questionId/reorder', isOrgAdmin, questionController.reorderQuestion);
 
 module.exports = router;

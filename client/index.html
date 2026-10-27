@@ -2,11 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- add favicon -->
-    <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ExamVault</title>
-    <link href="/src/styles.css" rel="stylesheet">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+
+    <title>ExamVault — Test your knowledge</title>
+    <meta name="description" content="A quiz platform for students, training teams and educators. Take quizzes, compare scores and earn certificates." />
+    <meta name="theme-color" content="#0a6f69" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ExamVault — Test your knowledge" />
+    <meta property="og:description" content="A quiz platform for students, training teams and educators." />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script>
+      // Apply the saved theme before first paint, otherwise dark users see a white flash
+      (function () {
+        try {
+          if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

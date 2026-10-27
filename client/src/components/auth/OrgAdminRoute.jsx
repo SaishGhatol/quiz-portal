@@ -1,5 +1,6 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import AuthContext from '../../contexts/AuthContext';
 import { Loader } from 'lucide-react';
 
@@ -12,10 +13,16 @@ const OrgAdminRoute = () => {
   const { currentUser, loading, isOrgAdmin } = useContext(AuthContext);
   const location = useLocation();
 
+  const denied = !loading && currentUser && !isOrgAdmin;
+
+  useEffect(() => {
+    if (denied) toast.error("You don't have access to that page — it's for organisation admins only.");
+  }, [denied]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader className="animate-spin h-6 w-6 text-indigo-500" />
+        <Loader className="animate-spin h-6 w-6 text-brand-500" />
       </div>
     );
   }
@@ -24,7 +31,7 @@ const OrgAdminRoute = () => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (!isOrgAdmin) {
+  if (denied) {
     return <Navigate to="/dashboard" replace />;
   }
 

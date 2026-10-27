@@ -21,6 +21,7 @@ An enterprise-ready quiz platform for tuition centres, schools, and training org
 - **Assign quizzes** to specific batches with start date, due date, and max attempts
 - Post **announcements** to all students or a specific batch
 - Monitor performance in the **analytics dashboard** — per-batch avg scores, recent activity
+- **Upgrade your plan** with Razorpay (₹) — Basic/Pro checkout, payment history, plan limits enforced automatically
 
 ### For Platform Admins
 - Manage all quizzes, questions, and users across the platform
@@ -71,6 +72,10 @@ MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/<dbname>
 PORT=3002
 JWT_SECRET=a-long-random-secret-string
 CLIENT_URL=http://localhost:5173
+
+# Optional — enables real plan upgrades via Razorpay. Leave blank to disable checkout.
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
 ```
 
 ```bash
@@ -94,6 +99,18 @@ VITE_API_URL=http://localhost:3002/api
 npm run dev        # starts on http://localhost:5173
 ```
 
+### Try every role locally (demo mode)
+
+No database needed. Instead of `npm run dev` in `server/`, run:
+
+```bash
+node dev-mem-server.js   # in-memory MongoDB + demo data, http://localhost:3002
+```
+
+Then start the client as above and open **http://localhost:5173/login**. A **Try a demo account** panel lets you sign in with one click as a platform admin, two org admins (different organisations), a student in a batch, or an independent learner — each with quizzes, assignments and attempt history. Data resets every time the server restarts. Account details live in `server/scripts/seedDemo.js`.
+
+Demo mode only exists on the in-memory server; it is never enabled against your real database.
+
 ---
 
 ## Usage Guide
@@ -102,8 +119,14 @@ npm run dev        # starts on http://localhost:5173
 ```
 Register → Dashboard → Browse quizzes or check My Classes
 → Take quiz → Results + certificate (if passed)
-→ Progress page (score trend, categories)
+→ Progress page (score trend, categories, achievements)
 ```
+
+Study tools for students:
+- **Practice mode** — untimed, one question at a time with instant feedback and explanations. Never scored or added to the leaderboard. Not available for proctored quizzes or while an assignment is still open.
+- **Mistake notebook** (`/mistakes`) — every question whose latest answer was wrong, with the correct answer and explanation. "Drill" them in practice; getting one right clears it.
+- **Saved quizzes** — press Save on any quiz; find them under Explore → Saved and on the dashboard.
+- **Achievements** — badges for milestones (first quiz, perfect score, 7-day streak, comebacks…) with progress toward the next one.
 
 ### Organisation Admin flow
 ```
@@ -169,6 +192,10 @@ examvault/
 | `GET  /api/org/analytics` | Org performance analytics |
 | `POST /api/admin/quizzes/create` | Create quiz (admin/org_admin) |
 | `POST /api/admin/quizzes/:id/duplicate` | Duplicate quiz |
+| `GET  /api/billing/plans` | Plan pricing (public) |
+| `POST /api/billing/create-order` | Create a Razorpay order for a plan upgrade |
+| `POST /api/billing/verify` | Verify payment signature & apply the upgrade |
+| `GET  /api/billing/history` | Organisation's payment history |
 
 ---
 

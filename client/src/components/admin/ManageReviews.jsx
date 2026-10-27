@@ -2,65 +2,81 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { Star, Trash2, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { toast } from 'react-toastify';
+import ConfirmDialog from '../ConfirmDialog';
+import { Page, PageHeader, Spinner, EmptyState, ErrorState } from '../ui';
 
 const ManageReviews = () => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [busy, setBusy] = useState({});
+  const [pendingDelete, setPendingDelete] = useState(null);
 
-  useEffect(() => {
+  // GET /reviews/all returns an array (accept { reviews } too)
+  const load = () => {
+    setLoading(true);
     api.get('/reviews/all')
-      .then(r => setReviews(r.data))
-      .catch(() => toast.error('Failed to load reviews'))
+      .then(r => {
+        const list = Array.isArray(r.data) ? r.data : Array.isArray(r.data?.reviews) ? r.data.reviews : [];
+        setReviews(list);
+        setError(null);
+      })
+      .catch(err => setError(err.response?.data?.message || 'Failed to load reviews.'))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
 
   const toggleApprove = async (id) => {
     setBusy(p => ({ ...p, [id]: 'approve' }));
     try {
       const { data } = await api.put(`/reviews/${id}/approve`);
-      setReviews(p => p.map(r => r._id === id ? { ...r, approved: data.approved } : r));
-    } catch { toast.error('Failed to update'); }
+      const approved = typeof data?.approved === 'boolean' ? data.approved : data?.review?.approved;
+      setReviews(p => p.map(r => r._id === id ? { ...r, approved: typeof approved === 'boolean' ? approved : !r.approved } : r));
+      toast.success(approved === false ? 'Approval revoked' : 'Review approved');
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to update'); }
     finally { setBusy(p => ({ ...p, [id]: null })); }
   };
 
-  const deleteReview = async (id) => {
-    if (!window.confirm('Delete this review?')) return;
+  const deleteReview = async () => {
+    const id = pendingDelete?._id;
+    if (!id) return;
     setBusy(p => ({ ...p, [id]: 'delete' }));
     try {
       await api.delete(`/reviews/${id}`);
       setReviews(p => p.filter(r => r._id !== id));
-      toast.success('Deleted');
-    } catch { toast.error('Failed to delete'); }
+      toast.success('Review deleted');
+      setPendingDelete(null);
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to delete'); }
     finally { setBusy(p => ({ ...p, [id]: null })); }
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[50vh]">
-      <Loader className="animate-spin h-6 w-6 text-indigo-500" />
-    </div>
+    <Page width="md"><Spinner label="Loading reviews" /></Page>
+  );
+
+  if (error) return (
+    <Page width="md"><ErrorState message={error} onRetry={load} /></Page>
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Reviews</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Approved reviews appear in the homepage testimonials.
-          </p>
-        </div>
+    <>
+      <Page width="md" className="space-y-6">
+        <PageHeader
+          title="Manage Reviews"
+          description="Approved reviews appear in the homepage testimonials."
+        />
 
         {reviews.length === 0 ? (
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-10 text-center text-sm text-gray-400">
-            No reviews yet.
+          <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl shadow-card">
+            <EmptyState compact icon={Star} title="No reviews yet." />
           </div>
         ) : (
           <div className="space-y-3">
             {reviews.map(r => (
               <div
                 key={r._id}
-                className={`bg-white dark:bg-gray-900 border rounded-xl p-5 flex flex-col sm:flex-row gap-4 ${
+                className={`bg-white dark:bg-gray-900 border rounded-2xl shadow-card p-5 flex flex-col sm:flex-row gap-4 ${
                   r.approved
                     ? 'border-gray-200 dark:border-gray-800'
                     : 'border-amber-200 dark:border-amber-800/40'
@@ -93,6 +109,7 @@ const ManageReviews = () => {
                     onClick={() => toggleApprove(r._id)}
                     disabled={!!busy[r._id]}
                     title={r.approved ? 'Revoke approval' : 'Approve'}
+                    aria-label={`${r.approved ? 'Revoke approval for' : 'Approve'} review by ${r.name || 'user'}`}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
                       r.approved
                         ? 'border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -106,9 +123,10 @@ const ManageReviews = () => {
                     {r.approved ? 'Revoke' : 'Approve'}
                   </button>
                   <button
-                    onClick={() => deleteReview(r._id)}
+                    onClick={() => setPendingDelete(r)}
                     disabled={!!busy[r._id]}
                     title="Delete review"
+                    aria-label={`Delete review by ${r.name || 'user'}`}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-800/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
                   >
                     {busy[r._id] === 'delete'
@@ -122,8 +140,18 @@ const ManageReviews = () => {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </Page>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Delete this review?"
+        message="The review is removed permanently and disappears from the homepage testimonials."
+        confirmLabel="Delete review"
+        busy={busy[pendingDelete?._id] === 'delete'}
+        onConfirm={deleteReview}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </>
   );
 };
 
